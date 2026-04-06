@@ -1,57 +1,165 @@
-(* Require Import LZ78Signature. *)
-From Stdlib Require Import Arith String Ascii List.
+From Stdlib Require Import Arith Strings.Byte List Lia.
 Import ListNotations.
 
 Module Impl.
-  Definition char_to_string (c : ascii) : string :=
-    String c EmptyString.
-
   Inductive Token :=
-  | Literal (c : ascii)
-  | BackRef (start : nat) (length : nat)
-  .
+    | Lit (b: byte)
+    | Ref (length offset: nat). (* 4bit length, 12bit offset *)
 
-  Fixpoint tokens_to_bytes (l : list Token) : list ascii := nil.
-
-  Fixpoint bytes_to_tokens (l : list ascii) : list Token := nil.
-
-  Fixpoint find_largest_match (bef : string) (aft : string) : option (nat * nat) := None.
-  (* returns 18 >= c >= 3, l where we need to go back c symbols back and l is the length  *)
-
-
-(* abcdeabcdeffg *)
-  Fixpoint compress (bef aft : string) (l : nat) : list Token :=
-    match l with
-    | 0 => 
-        match (find_largest_match bef aft) with 
-        | None => match aft with
-                | String hd tl => (Literal hd) :: compress (bef ++ char_to_string hd)%string tl 0
-                | EmptyString => nil
-            end
-        | Some (st, len) => match aft with
-                | String hd tl => (BackRef st len) :: (compress (bef ++ char_to_string hd)%string tl (len - 1))
-                | EmptyString => nil
-            end
-        end
-    | S x =>
-        match aft with 
-            | EmptyString => nil
-            | String hd tl => compress ((bef ++ char_to_string hd)%string) tl (x)
-        end
+  Definition nat_to_byte' (n: nat): byte :=
+    match of_nat (n mod 256) with
+    | Some b => b
+    | None => x00 (* Never happens *)
     end.
 
-  Fixpoint decompress (l : list Token) : string := EmptyString. 
-
-  Theorem correctness (s : string) : decompress (compress EmptyString s 0) = s.
-  Proof.  Admitted.
-
-  Definition compress (s : string) : compressed :=
-    compress_with_dictionary s EmptyString None nil nil 1.
-
-  Example compress_ok :
-  compress "aab"%string = [(None, "a"%char) ; (Some 1, "b"%char)].
+  (* This does not have the Never happens case! *)
+  Definition nat_to_byte (n: nat): byte.
   Proof.
-    reflexivity.
-  Qed.
+    destruct (of_nat (n mod 256)) eqn:?.
+    - exact b.
+    - exfalso.
+      assert (H_range : n mod 256 < 256).
+      + apply Nat.mod_upper_bound. lia.
+      + rewrite of_nat_None_iff in Heqo.
+        lia.
+  Defined.
+
+  Definition nibbles_to_byte (h l: nat): byte :=
+    nat_to_byte ((h mod 16) * 16 + (l mod 16)).
+
+  Definition token_to_bytes (t: Token): list byte :=
+    match t with
+    | Lit b => [b]
+    | Ref length offset =>
+        let len_opt := length - 3 in
+        let off_opt := offset - 3 in
+        let b0 := nibbles_to_byte len_opt (off_opt / 256) in
+        let b1 := nat_to_byte off_opt in
+        [b0; b1]
+    end.
+
+  Fixpoint tokens_to_bytes_fueled (tokens: list Token) (fuel: nat): list byte :=
+    match fuel, tokens with
+    | _, [] => []
+    | 0, _ => [] (* Never happens if fuel = length tokens *)
+    | S fuel, _ =>
+        let fix take_eight (ts: list Token) (n: nat) (flag: nat) (acc: list byte) :=
+          match n, ts with
+          | 0, _ => (nat_to_byte flag, ts, acc)
+          | S pn, [] => (nat_to_byte (flag * (2 ^ n)), [], acc)
+          | S pn, t :: tl =>
+              let flag' := match t with
+                           | Lit _ => flag * 2 + 1
+                           | Ref _ _ => flag * 2 end
+              in take_eight tl pn flag' (acc ++ token_to_bytes t)
+          end
+        in 
+        let '(flag, tail, acc) := take_eight tokens 8 0 [] in
+        flag :: acc ++ tokens_to_bytes_fueled tail fuel
+    end.
+
+  Definition tokens_to_bytes tokens := tokens_to_bytes_fueled tokens (length tokens).
+
+  Example tokens_to_bytes_test1 :
+    tokens_to_bytes [Lit "000"; Lit "001"; Lit "002"; Lit "003"; Lit "004"; Ref 5 1000] =
+    (* 0b1111_1000 = 248, (2 << 12) + 997 = 9189 = <35, 229> *) 
+    ["248"%byte; "000"%byte; "001"%byte; "002"%byte; "003"%byte; "004"%byte; "035"%byte; "229"%byte ].
+  Proof. reflexivity. Qed.
+
+  Example tokens_to_bytes_test2 :
+    tokens_to_bytes [Lit "000"; Lit "001"; Lit "002"; Lit "003"; Lit "004";
+    Lit "005"; Lit "006"; Lit "007"; Lit "008"; Lit "009"; Ref 5 1000] =
+    (* 0b1111_1111 = 255 *) 
+    ["255"%byte; "000"%byte; "001"%byte; "002"%byte; "003"%byte; "004"%byte; "005"%byte; "006"%byte; "007"%byte;
+    (* 0b1100_0000 = 192, (2 << 12) + 997 = 9189 = <35, 229> *) 
+    "192"%byte; "008"%byte; "009"%byte; "035"%byte; "229"%byte ].
+  Proof. reflexivity. Qed.
+
+  Definition bytes_to_token (l: list byte) (flag: bool): option Token * list byte :=
+    match flag, l with
+    | true, b :: tl => (Some (Lit b), tl)
+    | false, b0 :: b1 :: tl => 
+        let n0 := to_nat b0 in
+        let n1 := to_nat b1 in
+        let len_opt := n0 / 16 in
+        let off_hi := n0 mod 16 in
+        let off_lo := n1 in
+        (Some (Ref (len_opt + 3) (off_hi * 256 + off_lo + 3)), tl)
+    | _, _ => (None, []) (* This may happen if we consumed all bytes but flag had extra bits *)
+    end.
+
+  Fixpoint bytes_to_tokens_fueled (l: list byte) (fuel: nat) : list Token :=
+    match fuel, l with
+    | 0, _ => []
+    | _, [] => [] (* Never happens if fuel = length tokens *)
+    | S fuel, flag_byte :: tl =>
+        let flag := to_nat flag_byte in
+        let fix process_flag (n: nat) (after: list byte) : (list Token * list byte) :=
+          match n with
+          | 0 => ([], after)
+          | S pn =>
+              let (otoken, tail) := bytes_to_token after (Nat.testbit flag pn) in
+              match otoken with
+              | Some token => 
+                  let (tokens, rest) := process_flag pn tail in
+                  (token :: tokens, rest)
+              | None => ([], [])
+              end
+          end
+        in
+        let (tokens, tail) := process_flag 8 tl
+        in tokens ++ bytes_to_tokens_fueled tail fuel
+    end.
+
+  Definition bytes_to_tokens (l: list byte) : list Token :=
+    bytes_to_tokens_fueled l (length l).
+
+  Example bytes_to_tokens_test1 :
+    bytes_to_tokens ["248"%byte; "000"%byte; "001"%byte; "002"%byte; "003"%byte; "004"%byte; "035"%byte; "229"%byte ] =
+    [Lit "000"; Lit "001"; Lit "002"; Lit "003"; Lit "004"; Ref 5 1000].
+  Proof. reflexivity. Qed.
+
+  Example bytes_to_tokens_test2 :
+    bytes_to_tokens ["255"%byte; "000"%byte; "001"%byte; "002"%byte; "003"%byte; "004"%byte; "005"%byte; "006"%byte; "007"%byte;
+    "192"%byte; "008"%byte; "009"%byte; "035"%byte; "229"%byte ] =
+    [Lit "000"; Lit "001"; Lit "002"; Lit "003"; Lit "004";
+    Lit "005"; Lit "006"; Lit "007"; Lit "008"; Lit "009"; Ref 5 1000].
+  Proof. reflexivity. Qed.
+
+  (* returns 3 <= length <= 18, 3 <= offset <= 4098 *)
+  Fixpoint find_largest_match (before after: list byte): option (nat * nat) := None.
+
+  Fixpoint compress' (before after: list byte) (l: nat): list Token :=
+    match after, l with
+    | [], _ => []
+    | hd :: tl, 0 => 
+        match (find_largest_match before after) with 
+        | None => Lit hd :: compress' (before ++ [hd]) tl 0
+        | Some (length, offset) => Ref length offset :: compress' (before ++ [hd]) tl (length - 1)
+        end
+    | hd :: tl, S x => compress' (before ++ [hd]) tl x
+    end.
+
+  (* We need to add the length of s as a prefix here. *)
+  Definition compress (s: list byte): list Token :=
+    compress' [] s 0.
+
+  Fixpoint decompress (l : list Token) : list byte := nil. 
+
+
+  Theorem to_token_correctness: forall t, bytes_to_tokens (tokens_to_bytes t) = t.
+  Proof.
+  Admitted.
+
+  Theorem correctness: forall s,
+    decompress (compress s) = s.
+  Proof.
+  Admitted.
+
+  Theorem upperbound: forall s,
+    length (compress s) <= 9 * length s / 8 + 8 * Nat.log2 (length s) / 7.
+  Proof.
+  Admitted.
 
 End Impl.
+
