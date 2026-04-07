@@ -36,6 +36,36 @@ Section Substring.
         find_match' eqb s t (length s).
   
     Compute find_match (Nat.eqb) [1;2;3;4;5] [2;3;4].
+
+    Lemma find_match_corr' {A : Type} (eqb : A -> A -> bool) (s t : list A) (n p : nat) :
+        find_match' eqb s t p = Some n ->
+        list_eqb eqb (slice n (length t) s) t = true.
+    Proof.
+        intros.
+        induction p. simpl in H.  destruct (list_eqb eqb (slice 0 (length t) s) t) eqn:Heq.
+        inversion H. subst. assumption. inversion H.
+
+        simpl in H. destruct (list_eqb eqb (slice (S p) (length t) s) t) eqn:Hd.
+        inversion H. subst. assumption.
+
+        eapply IHp. assumption.
+    Qed.
+
+    Lemma find_match_corr {A : Type} (eqb : A -> A -> bool) (s t : list A) (n : nat) :
+        find_match eqb s t = Some n -> list_eqb eqb (slice n (length t) s) t = true.
+    Proof.
+        intros. eapply find_match_corr'. unfold find_match in H. exact H.
+    Qed.
+
+    Lemma equality_implies_length_eq {A : Type} (eqb : A -> A -> bool) (s t : list A) :
+        list_eqb eqb s t = true -> length s = length t.
+    Proof.
+    Admitted.
+
+    Lemma slice_size {A : Type} (s : list A) (p l : nat) :
+        length (slice p l s) = min l (length s - p).
+    Proof.
+    Admitted.
    
 
 End Substring.

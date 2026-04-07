@@ -172,20 +172,47 @@ Module Impl.
     assert (Init.Nat.min (length t) 18 <= 18). lia. exact H0. exact H.
   Qed.
 
-  Lemma find_largest_match_corr2' : forall s t l len off, (length s) <= 4098 -> find_largest_match' s t l = Some (len, off) -> 3 <= off <= 4098.
+  Lemma find_largest_match_corr2' : forall s t l len off, (length t) >= 3 -> (length s) <= 4098 -> find_largest_match' s t l = Some (len, off) -> 3 <= off <= 4098.
     intros s t l. generalize s t. clear s t. induction l.
-    intros. simpl in H0. inversion H0.
-    intros. simpl in H0. destruct l. inversion H0. destruct l. inversion H0.
-    destruct (find_match eqb
-(slice (length s - 4098) 4098 s)
-(slice 0 (S (S (S l))) t)). 
-Admitted.
-    (* inversion H0. clear H0. split. Admitted. lia. lia.
-    eapply IHl. lia. exact H0.
-  Qed. *)
+    intros. simpl in H1. inversion H1.
+    intros. simpl in H1. destruct l. inversion H1. destruct l. inversion H1.
+    remember (slice (length s - 4098) 4098 s) as suff.
+    remember (slice 0 (S (S (S l))) t) as pref.
+    destruct (find_match eqb suff pref) eqn:Hd.
+    inversion H1. clear H1. split.
+    assert (list_eqb Byte.eqb (slice n (length pref) suff) pref = true).
+    eapply find_match_corr. assumption.
+    specialize (equality_implies_length_eq eqb (slice n (length pref) suff) pref H1) as Heq.
+    assert (length pref = length (slice 0 (S (S (S l))) t)).
+    eapply f_equal. assumption.
+    specialize (slice_size t 0 (S (S (S l)))) as Hsize.
+    rewrite <- H2 in Hsize.
 
+    assert ((length pref) >= 3).
 
-    
+    destruct pref. simpl in Hsize. destruct t. inversion H. simpl in Hsize.
+    simpl in H. destruct t. simpl in H. lia. simpl in Hsize. destruct t.
+    simpl in H. lia. simpl in Hsize. lia.
+
+    destruct pref. simpl in Hsize. destruct t. inversion H. simpl in Hsize.
+    simpl in H. destruct t. simpl in H. lia. simpl in Hsize. destruct t.
+    simpl in H. lia. simpl in Hsize. lia. 
+
+    destruct pref. simpl in Hsize. destruct t. inversion H. simpl in Hsize.
+    simpl in H. destruct t. simpl in H. lia. simpl in Hsize. destruct t.
+    simpl in H. lia. simpl in Hsize. lia. simpl. lia.
+
+    assert (length (slice n (length pref) suff) >= 3). lia.
+
+    specialize (slice_size suff n (length pref)) as Hslice.
+    rewrite Hslice in H6. lia.
+
+    specialize (slice_size s (length s - 4098) 4098) as HH.
+    assert (length suff = length (slice (length s - 4098) 4098 s)).
+    apply f_equal. assumption. rewrite <- H1 in HH. lia.
+
+    eapply IHl. apply H. apply H0. exact H1.
+  Qed.
 
   Fixpoint compress' (before after: list byte) (l: nat): list Token :=
     match after, l with
