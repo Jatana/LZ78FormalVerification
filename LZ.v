@@ -1,5 +1,7 @@
 From Stdlib Require Import Arith Strings.Byte List Lia.
+Require Import StringsModule.
 Import ListNotations.
+
 
 Module Impl.
   Inductive Token :=
@@ -126,8 +128,64 @@ Module Impl.
     Lit "005"; Lit "006"; Lit "007"; Lit "008"; Lit "009"; Ref 5 1000].
   Proof. reflexivity. Qed.
 
+  Fixpoint find_largest_match' (before after: list byte) (l : nat) : option (nat * nat) :=
+    match l with
+      | 2 => None
+      | 1 => None
+      | 0 => None
+      | S k => 
+        let suff := (slice ((length before) - 4098) 4098 before) in
+        let m := find_match Byte.eqb suff (slice 0 l after) in
+        match m with
+          | None => find_largest_match' before after k
+          | Some p => Some (l, (length suff) - p)
+        end
+    end.
+
   (* returns 3 <= length <= 18, 3 <= offset <= 4098 *)
-  Fixpoint find_largest_match (before after: list byte): option (nat * nat) := None.
+  Definition find_largest_match (before after: list byte): option (nat * nat) := 
+    find_largest_match' before after (min (length after) 18).
+
+  Definition one : byte := "1"%byte.
+  Definition zero : byte := "0"%byte.
+  
+  Example find_largest_match_test1 : find_largest_match [zero; one; one; zero; one] [zero; one; one; zero] = Some (4, 5).
+  Proof. unfold find_largest_match. simpl. reflexivity. Qed.
+  
+  Example find_largest_match_test2 : find_largest_match [zero; one] [zero] = None.
+  Proof. unfold find_largest_match. simpl. reflexivity. Qed.
+
+  Lemma find_largest_match_corr1' : forall s t l len off, l <= 18 -> find_largest_match' s t l = Some (len, off) -> 3 <= len <= 18.
+    intros s t l. generalize s t. clear s t. induction l.
+    intros. simpl in H0. inversion H0.
+    intros. simpl in H0. destruct l. inversion H0. destruct l. inversion H0.
+    destruct (find_match eqb
+(slice (length s - 4098) 4098 s)
+(slice 0 (S (S (S l))) t)). 
+    inversion H0. clear H0. split. lia. lia.
+    eapply IHl. lia. exact H0.
+  Qed.
+
+  Lemma find_largest_match_corr1 : forall s t len off, find_largest_match s t = Some (len, off) -> 3 <= len <= 18.
+  Proof.
+    intros. unfold find_largest_match in H. eapply find_largest_match_corr1'.
+    assert (Init.Nat.min (length t) 18 <= 18). lia. exact H0. exact H.
+  Qed.
+
+  Lemma find_largest_match_corr2' : forall s t l len off, (length s) <= 4098 -> find_largest_match' s t l = Some (len, off) -> 3 <= off <= 4098.
+    intros s t l. generalize s t. clear s t. induction l.
+    intros. simpl in H0. inversion H0.
+    intros. simpl in H0. destruct l. inversion H0. destruct l. inversion H0.
+    destruct (find_match eqb
+(slice (length s - 4098) 4098 s)
+(slice 0 (S (S (S l))) t)). 
+Admitted.
+    (* inversion H0. clear H0. split. Admitted. lia. lia.
+    eapply IHl. lia. exact H0.
+  Qed. *)
+
+
+    
 
   Fixpoint compress' (before after: list byte) (l: nat): list Token :=
     match after, l with
