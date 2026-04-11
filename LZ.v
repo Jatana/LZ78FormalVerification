@@ -93,7 +93,7 @@ Module Impl.
   Fixpoint bytes_to_tokens_fueled (l: list byte) (fuel: nat) : list Token :=
     match fuel, l with
     | 0, _ => []
-    | _, [] => [] (* Never happens if fuel = length tokens *)
+    | _, [] => [] (* Never happens if fuel = length l *)
     | S fuel, flag_byte :: tl =>
         let flag := to_nat flag_byte in
         let fix process_flag (n: nat) (after: list byte) : (list Token * list byte) :=
@@ -156,6 +156,7 @@ Module Impl.
   Proof. unfold find_largest_match. simpl. reflexivity. Qed.
 
   Lemma find_largest_match_corr1' : forall s t l len off, l <= 18 -> find_largest_match' s t l = Some (len, off) -> 3 <= len <= 18.
+  Proof.
     intros s t l. generalize s t. clear s t. induction l.
     intros. simpl in H0. inversion H0.
     intros. simpl in H0. destruct l. inversion H0. destruct l. inversion H0.
@@ -173,6 +174,7 @@ Module Impl.
   Qed.
 
   Lemma find_largest_match_corr2' : forall s t l len off, (length t) >= 3 -> (length s) <= 4098 -> find_largest_match' s t l = Some (len, off) -> 3 <= off <= 4098.
+  Proof.
     intros s t l. generalize s t. clear s t. induction l.
     intros. simpl in H1. inversion H1.
     intros. simpl in H1. destruct l. inversion H1. destruct l. inversion H1.
