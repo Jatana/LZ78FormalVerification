@@ -214,6 +214,92 @@ Module Impl.
     eapply IHl. apply H. apply H0. exact H1.
   Qed.
 
+  Lemma find_largest_match_corr2 : forall s t len off, (length s) <= 4098 -> find_largest_match s t = Some (len, off) -> 3 <= off <= 4098.
+  Proof.
+    intros. unfold find_largest_match in H0.
+    destruct t. simpl in H0. inversion H0.
+    destruct t. simpl in H0. inversion H0.
+    destruct t. simpl in H0. inversion H0.
+    eapply find_largest_match_corr2'.
+    assert (length (b :: b0 :: b1 :: t) >= 3). simpl. lia.
+    exact H1. exact H. exact H0.
+  Qed.
+
+  Lemma find_largest_match_corr3' (s t : list byte) (n l len off : nat) :
+        find_largest_match' s t l = Some (len, off) -> (l <= length t) ->
+        list_eqb Byte.eqb (slice ((length s) - off) len s) (slice 0 len t) = true /\ len <= length t.
+  Proof.
+    generalize s t n len off. clear s t n len off. induction l.
+    intros. simpl in H. inversion H.
+
+    intros. simpl in H.
+    destruct l. inversion H.
+    destruct l. inversion H.
+
+    destruct (find_match eqb (slice (length s - 4098) 4098 s)
+              (slice 0 (S (S (S l))) t)) eqn:Hd.
+
+    inversion H. clear H.
+    remember (slice (length s - 4098) 4098 s) as suff.
+    remember (slice 0 (S (S (S l))) t) as pref.
+
+    specialize (find_match_corr Byte.eqb suff pref n0 Hd) as Hslice.
+    clear IHl.
+    specialize (slice_slice s (length s - 4098) 4098 n0 (length pref)) as Hdouble.
+    rewrite Heqsuff in Hslice. rewrite Hdouble in Hslice.
+    destruct Hslice as (Hslice1 & Hslice2).
+
+    assert (length pref >= 1). assert (length t >= 3). lia.
+    specialize (slice_size t 0 (S (S (S l)))) as Hpref_size. rewrite <- Heqpref in Hpref_size.
+    lia.
+
+    specialize (Hslice2 H). rewrite <- Heqsuff in Hslice2.
+    assert ((length s - (length suff - n0)) = (length s - 4098 + n0)).
+    specialize (slice_size s (length s - 4098) 4098) as Hsuff_size.
+    rewrite <- Heqsuff in Hsuff_size.
+    lia.
+
+    rewrite H1.
+    assert (length pref = (S (S (S l))) ).
+    specialize (slice_size t 0 (S (S (S l)))) as Hpref_size. rewrite <- Heqpref in Hpref_size.
+    lia.
+
+    rewrite H4 in Hslice1. 
+    assert ((4098 - n0) >= length pref).
+    specialize (equality_implies_length_eq Byte.eqb  (slice (length s - 4098 + n0) (Init.Nat.min (S (S (S l)))
+(4098 - n0)) s) pref Hslice1) as Hlength_eq.
+    specialize (slice_size s (length s - 4098 + n0) (Init.Nat.min (S (S (S l))) (4098 - n0))) as Hlen.
+    rewrite Hlen in Hlength_eq. clear Hlen.
+    lia.
+
+    rewrite H4 in H5.
+    assert (Init.Nat.min (S (S (S l))) (4098 - n0) = (S (S (S l)))).
+    lia.
+
+    rewrite H6 in Hslice1.
+
+
+    split.
+    assumption.
+    assumption.
+    
+    eapply IHl.     
+    exact l.
+    exact H.
+    lia.
+  Qed.
+
+  Lemma find_largest_match_corr3 (s t : list byte) (n l len off : nat) :
+        find_largest_match s t = Some (len, off) ->
+        list_eqb Byte.eqb (slice ((length s) - off) len s) (slice 0 len t) = true /\ len <= length t.
+  Proof.
+    intros. unfold find_largest_match in H. eapply find_largest_match_corr3'.
+    exact n.
+    exact H.
+    lia.
+  Qed.
+
+
   Fixpoint compress' (before after: list byte) (l: nat): list Token :=
     match after, l with
     | [], _ => []
@@ -230,7 +316,6 @@ Module Impl.
     compress' [] s 0.
 
   Fixpoint decompress (l : list Token) : list byte := nil. 
-
 
   Theorem to_token_correctness: forall t, bytes_to_tokens (tokens_to_bytes t) = t.
   Proof.

@@ -24,6 +24,21 @@ Section Substring.
             | _ => false
         end.
 
+    Lemma equality_implies_length_eq {A : Type} (eqb : A -> A -> bool) (s t : list A) :
+        list_eqb eqb s t = true -> length s = length t.
+    Proof.
+    Admitted.
+
+    Lemma slice_size {A : Type} (s : list A) (p l : nat) :
+        length (slice p l s) = min l (length s - p).
+    Proof.
+    Admitted.
+
+    Lemma slice_slice {A : Type} (s : list A) (p1 l1 p2 l2 : nat) :
+        slice p2 l2 (slice p1 l1 s) = slice (p1 + p2) (min l2 (l1 - p2)) s.
+    Proof.
+    Admitted.
+
     Fixpoint find_match' {A : Type} (eqb : A -> A -> bool) (s t : list A) (p : nat) : option nat := 
         if (list_eqb eqb (slice p (length t) s) t)
         then Some p
@@ -52,20 +67,18 @@ Section Substring.
     Qed.
 
     Lemma find_match_corr {A : Type} (eqb : A -> A -> bool) (s t : list A) (n : nat) :
-        find_match eqb s t = Some n -> list_eqb eqb (slice n (length t) s) t = true.
+        find_match eqb s t = Some n
+            -> list_eqb eqb (slice n (length t) s) t = true /\ ((length t >= 1) -> n <= length s - length t).
     Proof.
+        assert (find_match eqb s t = Some n
+            ->list_eqb eqb (slice n (length t) s) t = true).
         intros. eapply find_match_corr'. unfold find_match in H. exact H.
+        split. apply H. apply H0.
+
+        intros.
+        specialize (H H0).  
+        specialize (equality_implies_length_eq eqb (slice n (length t) s) t H) as H2.
+        rewrite slice_size in H2. lia.
     Qed.
-
-    Lemma equality_implies_length_eq {A : Type} (eqb : A -> A -> bool) (s t : list A) :
-        list_eqb eqb s t = true -> length s = length t.
-    Proof.
-    Admitted.
-
-    Lemma slice_size {A : Type} (s : list A) (p l : nat) :
-        length (slice p l s) = min l (length s - p).
-    Proof.
-    Admitted.
-   
 
 End Substring.
