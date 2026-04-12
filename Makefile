@@ -3,10 +3,11 @@
 ROCQC=rocq compile
 
 rocq:
-	$(ROCQC) StringsModule.v
+	$(ROCQC) Utils.v
+	$(ROCQC) LZ_Matching.v
+	$(ROCQC) LZ_Tokens.v
 	$(ROCQC) LZ.v
 
 clean:
 	rm -f *.vo* *.glob *.aux .*.aux .*.cache
-
 
