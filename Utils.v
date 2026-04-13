@@ -79,6 +79,13 @@ Module Util.
         reflexivity.
   Qed.
 
+  Lemma slice_l_length {A : Type} :
+    forall s: list A, forall l,
+    length s <= l ->
+    slice 0 l s = s.
+  Proof.
+  Admitted.
+
 End Util.
 
 Export Util.

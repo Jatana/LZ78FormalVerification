@@ -1,5 +1,5 @@
 From Stdlib Require Import Arith Strings.Byte List Lia.
-Require Import Utils LZ_Tokens.
+Require Import Utils LZ_Tokens LZ_Matching.
 Import ListNotations.
 
 Module Expand.
@@ -14,28 +14,6 @@ Module Expand.
         let b := nth_byte acc (length acc - off) in
         expand_ref (acc ++ [b]) len' off
     end.
-
-  Lemma nth_byte_eq_nth :
-    forall l n,
-      nth_byte l n = nth n l x00.
-  Proof.
-    reflexivity.
-  Qed.
-
-  Lemma expand_ref_0 :
-    forall acc off,
-      expand_ref acc 0 off = acc.
-  Proof.
-    reflexivity.
-  Qed.
-
-  Lemma expand_ref_S :
-    forall acc len off,
-      expand_ref acc (S len) off =
-        expand_ref (acc ++ [nth_byte acc (length acc - off)]) len off.
-  Proof.
-    reflexivity.
-  Qed.
 
   Lemma expand_ref_length :
     forall acc len off,

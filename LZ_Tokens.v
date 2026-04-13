@@ -7,14 +7,83 @@ Module Tokens.
     | Lit (b: byte)
     | Ref (length offset: nat). (* 4bit length, 12bit offset *)
 
+  Definition valid_token (t: Token) :=
+    match t with
+    | Lit _ => True
+    | Ref length offset => (3 <= length <= 18) /\ (3 <= offset <= 4098)
+    end.
+
   Definition nat_to_byte (n: nat): byte :=
     match of_nat (n mod 256) with
     | Some b => b
     | None => x00 (* Never happens *)
     end.
 
+  Fixpoint nat_to_bytes_fueled (fuel n: nat): list byte :=
+    match fuel with
+    | 0 => []
+    | S fuel =>
+        if n <? 128 then [nat_to_byte n]
+        else let byte := nat_to_byte ((n mod 128) + 128) in
+             byte :: nat_to_bytes_fueled fuel (n / 128)
+    end.
+
+  Definition nat_to_bytes (n: nat): list byte :=
+    nat_to_bytes_fueled n n.
+
+  Fixpoint bytes_to_nat (l: list byte): nat * list byte :=
+    match l with
+    | [] => (0, [])
+    | byte :: tl =>
+        let n := to_nat byte in
+        if n <? 128 then (n, tl)
+        else let (n', tail) := bytes_to_nat tl in
+             ((n mod 128) + 128 * n', tail)
+    end.
+
+  Lemma nat_to_bytes_correctness: forall n l,
+    nat_to_bytes n = l ->
+    bytes_to_nat l = (n, []).
+  Proof.
+  Admitted.
+
   Definition nibbles_to_byte (h l: nat): byte :=
     nat_to_byte ((h mod 16) * 16 + (l mod 16)).
+
+  Lemma to_nat_nibbles_correct : forall h l,
+    0 <= h < 16 ->
+    0 <= l < 16 ->
+    to_nat (nibbles_to_byte h l) = h * 16 + l.
+  Proof.
+    unfold nibbles_to_byte, nat_to_byte.
+    intros.
+    destruct (of_nat (_ mod 256)) eqn:?.
+    - apply to_of_nat_iff in Heqo.
+      rewrite Heqo.
+      rewrite (Nat.mod_small h 16 ltac:(lia)).
+      rewrite (Nat.mod_small l 16 ltac:(lia)).
+      exact (Nat.mod_small (h * 16 + l) 256 ltac:(lia)).
+    - exfalso.
+      apply of_nat_None_iff in Heqo.
+      pose proof (Nat.mod_upper_bound (h mod 16 * 16 + l mod 16) 256).
+      lia.
+  Qed.
+
+  Lemma to_nat_byte_correct : forall n,
+    0 <= n < 256 ->
+    to_nat (nat_to_byte n) = n.
+  Proof.
+    unfold nat_to_byte.
+    intros.
+    destruct (of_nat (_ mod 256)) eqn:?.
+    - apply to_of_nat_iff.
+      rewrite (Nat.mod_small n 256 ltac:(lia)) in Heqo.
+      assumption.
+    - exfalso.
+      apply of_nat_None_iff in Heqo.
+      pose proof (Nat.mod_upper_bound n 256 ltac:(lia)).
+      lia.
+  Qed.
 
   Definition token_to_bytes (t: Token): list byte :=
     match t with
@@ -23,31 +92,34 @@ Module Tokens.
         let len_opt := length - 3 in
         let off_opt := offset - 3 in
         let b0 := nibbles_to_byte len_opt (off_opt / 256) in
-        let b1 := nat_to_byte off_opt in
+        let b1 := nat_to_byte (off_opt mod 256) in
         [b0; b1]
+    end.
+
+  Fixpoint tokens_to_bytes_chunk (ts: list Token) (n: nat) (flag: nat) (acc: list byte) :=
+    match n, ts with
+    | 0, _ => (nat_to_byte flag, ts, acc)
+    | S pn, [] => (nat_to_byte (flag * (2 ^ n)), [], acc)
+    | S pn, t :: tl =>
+        let flag' := match t with
+                     | Lit _ => flag * 2 + 1
+                     | Ref _ _ => flag * 2 end
+        in tokens_to_bytes_chunk tl pn flag' (acc ++ token_to_bytes t)
     end.
 
   Fixpoint tokens_to_bytes_fueled (tokens: list Token) (fuel: nat): list byte :=
     match fuel, tokens with
-    | _, [] => []
     | 0, _ => [] (* Never happens if fuel = length tokens *)
+    | _, [] => []
     | S fuel, _ =>
-        let fix take_eight (ts: list Token) (n: nat) (flag: nat) (acc: list byte) :=
-          match n, ts with
-          | 0, _ => (nat_to_byte flag, ts, acc)
-          | S pn, [] => (nat_to_byte (flag * (2 ^ n)), [], acc)
-          | S pn, t :: tl =>
-              let flag' := match t with
-                           | Lit _ => flag * 2 + 1
-                           | Ref _ _ => flag * 2 end
-              in take_eight tl pn flag' (acc ++ token_to_bytes t)
-          end
-        in
-        let '(flag, tail, acc) := take_eight tokens 8 0 [] in
+        let '(flag, tail, acc) := tokens_to_bytes_chunk tokens 8 0 [] in
         flag :: acc ++ tokens_to_bytes_fueled tail fuel
     end.
 
   Definition tokens_to_bytes tokens := tokens_to_bytes_fueled tokens (length tokens).
+
+  Definition tokens_to_bytes_with_length tokens :=
+    nat_to_bytes (length tokens) ++ (tokens_to_bytes tokens).
 
   Example tokens_to_bytes_test1 :
     tokens_to_bytes [Lit "000"; Lit "001"; Lit "002"; Lit "003"; Lit "004"; Ref 5 1000] =
@@ -77,26 +149,26 @@ Module Tokens.
     | _, _ => (None, []) (* This may happen if we consumed all bytes but flag had extra bits *)
     end.
 
+  Fixpoint bytes_to_tokens_chunk (n flag: nat) (after: list byte) : (list Token * list byte) :=
+    match n with
+    | 0 => ([], after)
+    | S pn =>
+        let (otoken, tail) := bytes_to_token after (Nat.testbit flag pn) in
+        match otoken with
+        | Some token =>
+            let (tokens, rest) := bytes_to_tokens_chunk pn flag tail in
+            (token :: tokens, rest)
+        | None => ([], [])
+        end
+    end.
+
   Fixpoint bytes_to_tokens_fueled (l: list byte) (fuel: nat) : list Token :=
     match fuel, l with
-    | 0, _ => []
-    | _, [] => [] (* Never happens if fuel = length l *)
+    | 0, _ => [] (* Never happens if fuel = length l *)
+    | _, [] => []
     | S fuel, flag_byte :: tl =>
         let flag := to_nat flag_byte in
-        let fix process_flag (n: nat) (after: list byte) : (list Token * list byte) :=
-          match n with
-          | 0 => ([], after)
-          | S pn =>
-              let (otoken, tail) := bytes_to_token after (Nat.testbit flag pn) in
-              match otoken with
-              | Some token =>
-                  let (tokens, rest) := process_flag pn tail in
-                  (token :: tokens, rest)
-              | None => ([], [])
-              end
-          end
-        in
-        let (tokens, tail) := process_flag 8 tl
+        let (tokens, tail) := bytes_to_tokens_chunk 8 flag tl
         in tokens ++ bytes_to_tokens_fueled tail fuel
     end.
 
@@ -115,9 +187,68 @@ Module Tokens.
     Lit "005"; Lit "006"; Lit "007"; Lit "008"; Lit "009"; Ref 5 1000].
   Proof. reflexivity. Qed.
 
-  Theorem to_token_correctness: forall t, bytes_to_tokens (tokens_to_bytes t) = t.
+  Lemma token_encode_decode_correctness: forall t rest,
+    valid_token t ->
+    bytes_to_token (token_to_bytes t ++ rest)
+                   (match t with Lit _ => true | Ref _ _ => false end) = (Some t, rest).
+  Proof. (* Brute force proof takes too long... *)
+  (*  intros.*)
+  (*  destruct t.*)
+  (*  - reflexivity.*)
+  (*  - simpl in H |- *.*)
+  (*    apply pair_equal_spec.*)
+  (*    split; [f_equal | reflexivity].*)
+  (*    pose proof (Nat.divmod_spec (offset - 3) 255 0 255 ltac:(lia)) as Hdiv1.*)
+  (*    destruct (Nat.divmod (offset - 3) 255 0 255) as [q'1 u'1]. simpl.*)
+  (*    rewrite (to_nat_nibbles_correct (length - 3) q'1 ltac:(lia) ltac:(lia)).*)
+  (*    pose proof (Nat.divmod_spec ((length - 3) * 16 + q'1) 15 0 15 ltac:(lia)) as Hdiv2.*)
+  (*    destruct (Nat.divmod ((length - 3) * 16 + q'1) 15 0 15) as [q'2 u'2]. simpl.*)
+  (*    f_equal.*)
+  (*    + lia.*)
+  (*    + repeat match goal with*)
+  (*      | [ |- context[to_nat (nat_to_byte match ?e with _ => _ end)] ] => destruct e*)
+  (*      | [ |- context[to_nat (nat_to_byte ?b)] ] => *)
+  (*          rewrite (to_nat_byte_correct b ltac:(lia));*)
+  (*          repeat match goal with*)
+  (*                 | [ |- context[match ?e with _ => _ end] ] => destruct e*)
+  (*                 | [ |- _ ] => lia*)
+  (*                 end*)
+  (*      end.*)
+  (*Qed.*)
+  Admitted.
+
+  Lemma chunk_encode_decode_correctness: forall n tokens flag acc rest flag_byte tail,
+    n <= 8 ->
+    Forall valid_token tokens ->
+    tokens_to_bytes_chunk tokens n flag acc = (flag_byte, tail, acc) ->
+    bytes_to_tokens_chunk n (to_nat flag_byte) (acc ++ rest) = (firstn n tokens, rest).
   Proof.
   Admitted.
+
+  Lemma to_token_correctness_fueled: forall fuel1 t fuel2 l,
+    Forall valid_token t ->
+    length t <= fuel1 ->
+    tokens_to_bytes_fueled t fuel1 = l ->
+    length l <= fuel2 ->
+    bytes_to_tokens_fueled l fuel2 = t.
+  Proof.
+    unfold bytes_to_tokens_fueled.
+    induction fuel1; intros.
+    - assert (Hn: length t = 0) by lia.
+      apply length_zero_iff_nil in Hn.
+      simpl in H1. rewrite <- H1.
+      destruct fuel2; congruence.
+    - admit.
+  Admitted.
+
+  Theorem to_token_correctness: forall t,
+    Forall valid_token t ->
+    bytes_to_tokens (tokens_to_bytes t) = t.
+  Proof.
+    intros.
+    unfold bytes_to_tokens, tokens_to_bytes.
+    eapply to_token_correctness_fueled; trivial.
+  Qed.
 
 End Tokens.
 

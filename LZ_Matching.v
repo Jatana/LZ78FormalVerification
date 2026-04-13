@@ -228,7 +228,7 @@ Module Matching.
     lia.
   Qed.
 
-  Lemma find_largest_match_corr3 (s t : list byte) (n l len off : nat) :
+  Lemma find_largest_match_corr3 (s t : list byte) (len off : nat) :
     find_largest_match s t = Some (len, off) ->
     list_eqb Byte.eqb (slice ((length s) - off) len s) (slice 0 len t) = true /\ len <= length t.
   Proof.

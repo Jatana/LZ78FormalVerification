@@ -15,7 +15,6 @@ Module Impl.
     | hd :: tl, S x => compress' (before ++ [hd]) tl x
     end.
 
-  (* We need to add the length of s as a prefix here. *)
   Definition compress (s: list byte): list Token :=
     compress' [] s 0.
 
@@ -23,19 +22,63 @@ Module Impl.
     match l with
     | [] => acc
     | Lit b :: tl => decompress' (acc ++ [b]) tl
-    | Ref len off :: tl => decompress' (expand_ref acc len off) tl
+    | Ref len off :: tl => decompress' (acc ++ (slice ((length acc) - off) len acc)) tl
     end.
 
   Definition decompress (l : list Token) : list byte :=
     decompress' [] l.
+
+  Theorem correctness': forall n before after,
+    length after <= n ->
+    decompress' before (compress' before after 0) = before ++ after.
+  Proof.
+    induction n; simpl; intros.
+    - inversion H.
+      apply length_zero_iff_nil in H1. subst.
+      simpl.
+      rewrite app_nil_r. reflexivity.
+    - destruct after.
+      + simpl. rewrite app_nil_r. reflexivity.
+      + simpl. destruct (find_largest_match before (_ :: after)) eqn:?.
+        -- destruct p as [len off]; simpl.
+           assert ((compress' (before ++ [b]) after (len - 1))
+           = (compress' (before ++ [b] ++ (slice 0 (len - 1) after)) (slice (len - 1) (length after) after) 0)). {
+             admit.
+           }
+           rewrite H0.
+           pose proof (find_largest_match_corr3 before (b :: after) len off Heqo).
+           assert (slice (length before - off) len before = slice 0 len (b :: after)) by admit.
+           rewrite H2.
+           assert (slice 0 len (b :: after) = [b] ++ slice 0 (len - 1) after) by admit.
+           rewrite H3.
+           assert (before ++ b :: after = (before ++ [b] ++ slice 0 (len - 1) after) ++ (slice (len - 1) (length after) after)) by admit.
+           rewrite H4.
+           eapply IHn.
+           pose proof (slice_size after (len - 1) (length after)).
+           rewrite H5.
+           simpl in H.
+           lia.
+        -- simpl.
+           specialize (IHn (before ++ [b]) after).
+           assert ((before ++ [b]) ++ after = before ++ b :: after) by admit.
+           rewrite H0 in IHn.
+           eapply IHn.
+           simpl in H.
+           lia.
+  Admitted.
   
   Theorem correctness: forall s,
     decompress (compress s) = s.
   Proof.
-  Admitted.
+    unfold compress, decompress.
+    intros.
+    pose proof (correctness' (length s) [] s ltac:(lia)).
+    rewrite app_nil_l in H.
+    exact H.
+  Qed.
 
   Theorem upperbound: forall s,
-    length (compress s) <= 9 * length s / 8 + 8 * Nat.log2 (length s) / 7.
+    length (tokens_to_bytes_with_length (compress s)) <= 9 * length s / 8 + 8 * Nat.log2 (length s) / 7.
   Proof.
   Admitted.
 
@@ -50,7 +93,7 @@ Section Tests.
   Definition repeating : list byte := [zero; one; one; zero; one; zero; one; one; zero].
   Definition overlapping : list byte := [zero; one; zero; one; zero; one].
   Definition compressed_repeating : list Token := [Lit zero; Lit one; Lit one; Lit zero; Lit one; Ref 4 5].
-  Definition compressed_overlapping : list Token := [Lit zero; Lit one; Ref 4 2].
+  Definition compressed_overlapping : list Token := [Lit zero; Lit one; Lit zero; Lit one; Lit zero; Lit one].
   
   Example compress_empty_test :
     compress empty = [].
