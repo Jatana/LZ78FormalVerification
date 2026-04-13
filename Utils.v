@@ -21,6 +21,22 @@ Module Util.
     | _ => false
     end.
 
+  Lemma list_eqb_implies_equality {A : Type} (eqb : A -> A -> bool) : 
+    forall s t, (forall x y, eqb x y = true <-> x = y) -> list_eqb eqb s t = true -> s = t.
+  Proof.
+    intros.
+    generalize t H0. clear H0 t.
+    induction s.
+      - intros. destruct t. reflexivity. inversion H0.
+      - intros. destruct t. inversion H0. simpl in H0.
+        destruct (eqb a a0) eqn:Heq. specialize (H a a0). destruct H as (H1 & H2).
+        specialize (H1 Heq). subst. apply f_equal. apply IHs. inversion H0. reflexivity.
+        specialize (H a a0). destruct H as (H1 & H2).
+        assert ((a = a0) -> False). intro Heqaa0. subst. 
+        assert (eqb a0 a0 = true). apply H2. reflexivity. rewrite H in Heq. inversion Heq.
+        inversion H0.
+  Qed.
+
   Lemma equality_implies_length_eq {A : Type} (eqb : A -> A -> bool) :
     forall s t,
     list_eqb eqb s t = true -> length s = length t.
@@ -79,10 +95,27 @@ Module Util.
         reflexivity.
   Qed.
 
+  Lemma slice_eq {A : Type} : 
+    forall s: list A, forall l : nat, 
+    s = (slice 0 l s) ++ (slice l ((length s) - l) s).
+  Proof.
+  Admitted.
+
   Lemma slice_l_length {A : Type} :
     forall s: list A, forall l,
     length s <= l ->
     slice 0 l s = s.
+  Proof.
+  Admitted.
+
+  Lemma slice_p_l_length {A : Type} :
+    forall s: list A, forall l p,
+    (length s) - p <= l ->
+    slice p l s = slice p ((length s) - p) s.
+  Proof.
+  Admitted.
+
+  Lemma ByteEqbImpliesEquality : forall x y, Byte.eqb x y = true <-> x = y.
   Proof.
   Admitted.
 
