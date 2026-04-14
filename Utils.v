@@ -99,25 +99,51 @@ Module Util.
     forall s: list A, forall l : nat, 
     s = (slice 0 l s) ++ (slice l ((length s) - l) s).
   Proof.
-  Admitted.
+    induction s; intros.
+    - reflexivity.
+    - destruct l; simpl.
+      + specialize (IHs (length s)).
+        assert (length s - length s = 0) by lia.
+        rewrite H in IHs.
+        rewrite slice_l_zero in IHs.
+        rewrite app_nil_r in IHs.
+        rewrite <- IHs.
+        reflexivity.
+      + rewrite <- IHs.
+        reflexivity.
+  Qed.
 
   Lemma slice_l_length {A : Type} :
     forall s: list A, forall l,
     length s <= l ->
     slice 0 l s = s.
   Proof.
-  Admitted.
+    intros.
+    pose proof (slice_eq s l) as Hs.
+    assert (Hl: length s - l = 0) by lia.
+    rewrite Hl in Hs.
+    rewrite slice_l_zero in Hs.
+    rewrite app_nil_r in Hs.
+    auto.
+  Qed.
 
   Lemma slice_p_l_length {A : Type} :
     forall s: list A, forall l p,
     (length s) - p <= l ->
     slice p l s = slice p ((length s) - p) s.
   Proof.
-  Admitted.
-
-  Lemma ByteEqbImpliesEquality : forall x y, Byte.eqb x y = true <-> x = y.
-  Proof.
-  Admitted.
+    induction s; intros; simpl.
+    - reflexivity.
+    - destruct p eqn:?.
+      + destruct l eqn:?.
+        * inversion H.
+        * simpl in H.
+          rewrite (slice_l_length s n ltac:(lia)).
+          rewrite (slice_l_length s (length s) ltac:(lia)).
+          reflexivity.
+      + simpl in H.
+        auto.
+  Qed.
 
 End Util.
 

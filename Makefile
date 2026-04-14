@@ -6,7 +6,6 @@ rocq:
 	$(ROCQC) Utils.v
 	$(ROCQC) LZ_Matching.v
 	$(ROCQC) LZ_Tokens.v
-	$(ROCQC) LZ_Expand.v
 	$(ROCQC) LZ.v
 
 clean:

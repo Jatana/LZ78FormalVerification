@@ -1,5 +1,4 @@
 Utils.v
 LZ_Matching.v
-LZ_Expand.v
 LZ_Tokens.v
 LZ.v

@@ -1,5 +1,5 @@
 From Stdlib Require Import Arith Strings.Byte List Lia.
-Require Import Utils LZ_Matching LZ_Tokens LZ_Expand.
+Require Import Utils LZ_Matching LZ_Tokens.
 Import ListNotations.
 
 Module Impl.
@@ -78,7 +78,8 @@ Module Impl.
            rewrite H0.
            pose proof (find_largest_match_corr3 before (b :: after) len off Heqo).
            assert (slice (length before - off) len before = slice 0 len (b :: after)). {
-            destruct H1 as (H1 & _). eapply list_eqb_implies_equality. exact ByteEqbImpliesEquality. exact H1.
+            destruct H1 as (H1 & _). eapply list_eqb_implies_equality.
+            split; [apply byte_dec_bl | apply byte_dec_lb]. exact H1.
            }
            rewrite H2.
            assert (slice 0 len (b :: after) = [b] ++ slice 0 (len - 1) after). {
