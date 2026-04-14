@@ -19,6 +19,22 @@ Module Tokens.
     | None => x00 (* Never happens *)
     end.
 
+  Lemma nat_to_byte_correctness : forall n,
+    0 <= n < 256 ->
+    to_nat (nat_to_byte n) = n.
+  Proof.
+    unfold nat_to_byte.
+    intros.
+    destruct (of_nat (_ mod 256)) eqn:?.
+    - apply to_of_nat_iff.
+      rewrite (Nat.mod_small n 256 ltac:(lia)) in Heqo.
+      assumption.
+    - exfalso.
+      apply of_nat_None_iff in Heqo.
+      pose proof (Nat.mod_upper_bound n 256 ltac:(lia)).
+      lia.
+  Qed.
+
   Fixpoint nat_to_bytes_fueled (fuel n: nat): list byte :=
     match fuel with
     | 0 => []
@@ -41,9 +57,65 @@ Module Tokens.
              ((n mod 128) + 128 * n', tail)
     end.
 
-  Lemma nat_to_bytes_correctness: forall n l,
-    nat_to_bytes n = l ->
-    bytes_to_nat l = (n, []).
+  Lemma nat_to_bytes_correctness': forall n fuel,
+    n <= fuel ->
+    bytes_to_nat (nat_to_bytes_fueled fuel n) = (n, []).
+  Proof.
+    induction n as [n IHn] using lt_wf_rec; intros.
+    destruct fuel.
+    - assert (n = 0) by lia. subst.
+      reflexivity.
+    - simpl.
+      destruct (n <? 128) eqn:?; subst; simpl.
+      + apply Nat.ltb_lt in Heqb as Hnl.
+        rewrite nat_to_byte_correctness by lia.
+        rewrite Heqb. reflexivity.
+      + apply Nat.ltb_ge in Heqb as Hng.
+        set (b := nat_to_byte (n mod 128 + 128)).
+        assert (to_nat b = n mod 128 + 128). {
+          apply nat_to_byte_correctness.
+          pose proof (Nat.mod_upper_bound n 128 ltac:(lia)).
+          lia.
+        }
+        match goal with
+        | [ |- context[if to_nat (nat_to_byte ?m) <? _ then _ else _] ] =>
+            assert (Hm: m = n mod 128 + 128) by reflexivity; rewrite Hm; clear Hm
+        end.
+        assert (Heqby: n mod 128 + 128 < 256). {
+          pose proof (Nat.mod_upper_bound n 128 ltac:(lia)). lia.
+        }
+        rewrite nat_to_byte_correctness by lia.
+        assert (Hf: n mod 128 + 128 <? 128 = false). {
+          apply Nat.ltb_ge. lia.
+        }
+        rewrite Hf.
+        replace (fst (Nat.divmod n 127 0 127)) with (n / 128) by reflexivity.
+        assert (Hdiv : n / 128 < n) by (apply Nat.div_lt; lia).
+        rewrite (IHn (n / 128) Hdiv fuel ltac:(lia)).
+        f_equal.
+        pose proof (Nat.divmod_spec (n mod 128 + 128) 127 0 127 ltac:(lia)).
+        destruct (Nat.divmod (n mod 128 + 128) 127 0 127) as [q u].
+        simpl.
+        match goal with
+        | [ |- ?l + ?r = _ ] =>
+            assert (Hl: l = 127 - u) by reflexivity;
+            assert (Hr: r = 128 * (n / 128)) by reflexivity;
+            rewrite Hl, Hr; clear Hl Hr
+        end.
+        pose proof (Nat.div_mod n 128 ltac:(lia)).
+        lia.
+  Qed.
+
+  Lemma nat_to_bytes_correctness: forall n,
+    bytes_to_nat (nat_to_bytes n) = (n, []).
+  Proof.
+    intro. unfold nat_to_bytes.
+    apply nat_to_bytes_correctness'.
+    lia.
+  Qed.
+
+  Lemma nat_to_bytes_length: forall n,
+    length (nat_to_bytes n) <= 8 * (Nat.log2 n) / 7.
   Proof.
   Admitted.
 
@@ -66,22 +138,6 @@ Module Tokens.
     - exfalso.
       apply of_nat_None_iff in Heqo.
       pose proof (Nat.mod_upper_bound (h mod 16 * 16 + l mod 16) 256).
-      lia.
-  Qed.
-
-  Lemma to_nat_byte_correct : forall n,
-    0 <= n < 256 ->
-    to_nat (nat_to_byte n) = n.
-  Proof.
-    unfold nat_to_byte.
-    intros.
-    destruct (of_nat (_ mod 256)) eqn:?.
-    - apply to_of_nat_iff.
-      rewrite (Nat.mod_small n 256 ltac:(lia)) in Heqo.
-      assumption.
-    - exfalso.
-      apply of_nat_None_iff in Heqo.
-      pose proof (Nat.mod_upper_bound n 256 ltac:(lia)).
       lia.
   Qed.
 
@@ -117,9 +173,6 @@ Module Tokens.
     end.
 
   Definition tokens_to_bytes tokens := tokens_to_bytes_fueled tokens (length tokens).
-
-  Definition tokens_to_bytes_with_length tokens :=
-    nat_to_bytes (length tokens) ++ (tokens_to_bytes tokens).
 
   Example tokens_to_bytes_test1 :
     tokens_to_bytes [Lit "000"; Lit "001"; Lit "002"; Lit "003"; Lit "004"; Ref 5 1000] =
@@ -208,7 +261,7 @@ Module Tokens.
   (*    + repeat match goal with*)
   (*      | [ |- context[to_nat (nat_to_byte match ?e with _ => _ end)] ] => destruct e*)
   (*      | [ |- context[to_nat (nat_to_byte ?b)] ] => *)
-  (*          rewrite (to_nat_byte_correct b ltac:(lia));*)
+  (*          rewrite (nat_to_byte_correctness b ltac:(lia));*)
   (*          repeat match goal with*)
   (*                 | [ |- context[match ?e with _ => _ end] ] => destruct e*)
   (*                 | [ |- _ ] => lia*)
@@ -232,13 +285,6 @@ Module Tokens.
     length l <= fuel2 ->
     bytes_to_tokens_fueled l fuel2 = t.
   Proof.
-    unfold bytes_to_tokens_fueled.
-    induction fuel1; intros.
-    - assert (Hn: length t = 0) by lia.
-      apply length_zero_iff_nil in Hn.
-      simpl in H1. rewrite <- H1.
-      destruct fuel2; congruence.
-    - admit.
   Admitted.
 
   Theorem to_token_correctness: forall t,

@@ -133,10 +133,28 @@ Module Impl.
     exact H.
   Qed.
 
-  Theorem upperbound: forall s,
-    length (tokens_to_bytes_with_length (compress s)) <= 9 * length s / 8 + 8 * Nat.log2 (length s) / 7.
+
+  Definition compress_to_bytes s :=
+    nat_to_bytes (length s) ++ (tokens_to_bytes (compress s)).
+
+  Lemma upperbound': forall s,
+    length (tokens_to_bytes (compress s)) <= 9 * length s / 8.
   Proof.
+    induction s.
+    - simpl. lia.
+    -
   Admitted.
+
+  Theorem upperbound: forall s,
+    length (compress_to_bytes s) <= 9 * length s / 8 + 8 * Nat.log2 (length s) / 7.
+  Proof.
+    unfold compress_to_bytes.
+    intros.
+    rewrite length_app.
+    pose proof (upperbound' s) as Hub.
+    pose proof (nat_to_bytes_length (length s)) as Hl.
+    lia.
+  Qed.
 
 End Impl.
 
