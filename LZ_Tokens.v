@@ -270,22 +270,85 @@ Module Tokens.
   (*Qed.*)
   Admitted.
 
-  Lemma chunk_encode_decode_correctness: forall n tokens flag acc rest flag_byte tail,
+  Lemma chunk_remove: forall n tokens acc flag_byte tail,
     n <= 8 ->
     Forall valid_token tokens ->
-    tokens_to_bytes_chunk tokens n flag acc = (flag_byte, tail, acc) ->
-    bytes_to_tokens_chunk n (to_nat flag_byte) (acc ++ rest) = (firstn n tokens, rest).
+    tokens_to_bytes_chunk tokens n 0 [] = (flag_byte, tail, acc) ->
+    exists prev,
+      tokens = prev ++ tail /\
+      Forall valid_token prev /\
+      length prev = Nat.min n (length tokens) /\
+      tokens_to_bytes_chunk prev n 0 [] = (flag_byte, [], acc).
   Proof.
   Admitted.
 
-  Lemma to_token_correctness_fueled: forall fuel1 t fuel2 l,
+  Lemma chunk_app: forall n flag acc rest tokens tail,
+    bytes_to_tokens_chunk n flag acc = (tokens, tail) ->
+    bytes_to_tokens_chunk n flag (acc ++ rest) = (tokens, tail ++ rest).
+  Proof.
+  Admitted.
+
+  Lemma to_token_chunk_correctness: forall n tokens acc flag_byte tail,
+    n <= 8 ->
+    Forall valid_token tokens ->
+    tokens_to_bytes_chunk tokens n 0 [] = (flag_byte, tail, acc) ->
+    bytes_to_tokens_chunk n (to_nat flag_byte) (acc) = (tokens, []).
+  Proof.
+  Admitted.
+
+  Lemma to_token_fueled_correctness: forall fuel1 fuel2 t l,
     Forall valid_token t ->
     length t <= fuel1 ->
     tokens_to_bytes_fueled t fuel1 = l ->
     length l <= fuel2 ->
     bytes_to_tokens_fueled l fuel2 = t.
   Proof.
-  Admitted.
+    induction fuel1; intros.
+    - inversion H0. apply length_zero_iff_nil in H4. subst.
+      destruct fuel2; reflexivity.
+    - destruct t.
+      + simpl in H1; subst. destruct fuel2; reflexivity.
+      + unfold tokens_to_bytes_fueled in H1.
+        destruct (tokens_to_bytes_chunk _ _ _) as [[flag restT] bytes] eqn:?.
+        match goal with
+        | [ H: _ :: _ ++ ?f _ _ = _ |- _ ] =>
+            assert (Hfun: f = tokens_to_bytes_fueled) by reflexivity; rewrite Hfun in H; clear Hfun
+        end.
+
+        unfold bytes_to_tokens_fueled.
+        destruct fuel2.
+        * inversion H2. apply length_zero_iff_nil in H4. subst. discriminate.
+        * destruct l. discriminate.
+          destruct (bytes_to_tokens_chunk 8 (to_nat b) l) as [tokens tail] eqn:?.
+          match goal with
+          | [ |- _ ++ ?f _ _ = _] =>
+              assert (Hfun: f = bytes_to_tokens_fueled) by reflexivity; rewrite Hfun; clear Hfun
+          end.
+
+          assert (flag = b) by congruence. subst.
+          injection H1 as H1.
+          pose proof (chunk_remove 8 (t :: t0) bytes b restT ltac:(lia) H Heqp) as [prev [Heqpv [Hf [Hl Ht]]]].
+          pose proof (to_token_chunk_correctness 8 prev bytes b [] ltac:(lia) Hf Ht).
+          pose proof (chunk_app 8 (to_nat b) bytes (tokens_to_bytes_fueled restT fuel1) prev [] H3).
+          rewrite app_nil_l in H4.
+          assert (prev = tokens) by congruence. subst.
+          rewrite Heqpv, app_inv_head_iff.
+          assert (Forall valid_token restT). {
+            rewrite Heqpv in H.
+            apply Forall_app in H. tauto.
+          }
+          assert (length restT <= fuel1). {
+            rewrite Heqpv in H0. simpl in H0.
+            rewrite length_app, Hl in H0.
+            simpl in H0. lia.
+          }
+          assert (length tail <= fuel2). {
+            assert (tail = tokens_to_bytes_fueled restT fuel1) by congruence. subst.
+            simpl in H2. rewrite length_app in H2.
+            lia.
+          }
+          exact (IHfuel1 fuel2 restT tail H1 H5 ltac:(congruence) H6).
+  Qed.
 
   Theorem to_token_correctness: forall t,
     Forall valid_token t ->
@@ -293,7 +356,7 @@ Module Tokens.
   Proof.
     intros.
     unfold bytes_to_tokens, tokens_to_bytes.
-    eapply to_token_correctness_fueled; trivial.
+    eapply to_token_fueled_correctness; trivial.
   Qed.
 
 End Tokens.
