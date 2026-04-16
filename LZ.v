@@ -136,14 +136,77 @@ Module Impl.
 
   Definition compress_to_bytes s :=
     nat_to_bytes (length s) ++ (tokens_to_bytes (compress s)).
+  
+  Definition symb_weight := 
+    fun x : Token => match x with 
+      | Lit _ => 1
+      | Ref _ _ => 3
+    end.
+
+  Lemma weight_bound : forall n before after,
+    length after <= n -> 
+    list_sum (map symb_weight (compress' before after 0)) <= length after.
+  Proof.
+    induction n.
+      - intros. destruct after. 
+        -- simpl. lia.
+        -- inversion H.  
+      - intros. destruct after.
+        -- simpl. lia.
+        -- simpl. destruct (find_largest_match before (b :: after)) eqn:Hd. destruct p.
+          --- simpl. rewrite compress_rolls. specialize (find_largest_match_corr1 _ _ _ _ Hd) as Hlength.
+              Search (S _ <= S _). apply le_n_S. Search (S _ <= _ -> _ <= _).
+              specialize (find_largest_match_corr3 _ _ _ _ Hd) as Hcor.
+              destruct Hcor as (Hcor1 & Hcor2).
+              destruct after. simpl in Hcor2. lia.
+              destruct after. simpl in Hcor2. lia.
+              simpl. apply le_n_S. apply le_n_S.
+              etransitivity. apply IHn. destruct n0. lia. destruct n0. lia. destruct n0. lia.
+              simpl. 
+              rewrite slice_size. simpl in H. lia.
+              destruct n0. lia. destruct n0. lia. destruct n0. lia.
+              simpl.
+              rewrite slice_size. simpl in H. lia.
+          --- simpl. apply le_n_S. eapply IHn. simpl in H. lia.   
+  Qed.
+
+  Lemma chunk_lemma : forall seq fl' n,
+    length seq <= 8 -> n <= 8 ->
+    (tokens_to_bytes_chunk_len seq n fl') <= ((list_sum (map symb_weight seq))).
+  Proof.
+    induction seq.
+      - intros. simpl. destruct n; lia.
+      - intros. simpl. destruct n. 
+        -- lia.
+        -- destruct a.
+          --- simpl. replace (tokens_to_bytes_chunk_len seq n (fl' * 2 + 1) + 1) with (S (tokens_to_bytes_chunk_len seq n (fl' * 2 + 1))) by lia.
+              apply le_n_S. eapply IHseq. simpl in H. lia. lia.
+          --- simpl.  replace (tokens_to_bytes_chunk_len seq n (fl' * 2) + 2) with (S (S (tokens_to_bytes_chunk_len seq n (fl' * 2)))) by lia.
+              do 2 apply le_n_S. etransitivity. eapply IHseq. simpl in H. lia.
+              lia. lia.                     
+  Qed.
+
+  Lemma tokens_to_bytes_bounded_by_weight : forall seq,
+    length (tokens_to_bytes seq) <= (9 * (list_sum (map symb_weight seq)) + 7) / 8.
+  Proof.
+
+  Admitted.
+
+  Lemma upperbound'': forall before after,
+    length (tokens_to_bytes (compress' before after 0)) <= (9 * (length after) + 7) / 8.
+  Proof.
+    intros. specialize (weight_bound before after) as H.
+    specialize (tokens_to_bytes_bounded_by_weight (compress' before after 0)) as H'.
+    assert ((9 * (list_sum (map symb_weight (compress' before after 0))) + 7) / 8 <= (9 * (length after) + 7) / 8).
+    - Search (_ / _ <= _ / _). apply Nat.Div0.div_le_mono. lia.
+    - etransitivity. exact H'. exact H0.
+  Qed.
 
   Lemma upperbound': forall s,
-    length (tokens_to_bytes (compress s)) <= 9 * length s / 8.
+    length (tokens_to_bytes (compress s)) <= (9 * length s + 7) / 8.
   Proof.
-    induction s.
-    - simpl. lia.
-    -
-  Admitted.
+    intros. eapply upperbound''.
+  Qed.
 
   Theorem upperbound: forall s,
     length (compress_to_bytes s) <= 9 * length s / 8 + 8 * Nat.log2 (length s) / 7.

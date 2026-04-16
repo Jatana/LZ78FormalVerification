@@ -151,6 +151,20 @@ Module Tokens.
         let b1 := nat_to_byte (off_opt mod 256) in
         [b0; b1]
     end.
+  
+  (* Inductive tokens_to_bytes_chunk_len (n : nat) (flag : nat) (l : nat) :=
+    |  *)
+
+  Fixpoint tokens_to_bytes_chunk_len (ts: list Token) (n: nat) (flag: nat) :=
+    match n, ts with
+    | 0, _ => 0
+    | S pn, [] => 0
+    | S pn, t :: tl =>
+        let flag' := match t with
+                     | Lit _ => flag * 2 + 1
+                     | Ref _ _ => flag * 2 end
+        in (tokens_to_bytes_chunk_len tl pn flag') + (length (token_to_bytes t))
+    end.
 
   Fixpoint tokens_to_bytes_chunk (ts: list Token) (n: nat) (flag: nat) (acc: list byte) :=
     match n, ts with
