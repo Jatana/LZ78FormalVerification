@@ -192,7 +192,8 @@ Module Impl.
            --- simpl. apply le_n_S. eapply IHn. simpl in H. lia.   
   Qed.
 
-  Lemma chunk_lemma : forall seq n fl,
+  (* maybe use: tokens_to_bytes_chunk_len_correctness *)
+  Lemma chunk_length_bound: forall seq n fl,
       n <= 8 ->
       (tokens_to_bytes_chunk_len seq n fl) <= ((list_sum (map symb_weight seq))).
   Proof.
@@ -209,7 +210,7 @@ Module Impl.
              do 2 apply le_n_S. etransitivity. eapply IHseq. simpl in H. lia.
              lia.                      
   Qed.
-    
+
   Lemma tokens_to_bytes_bounded_by_weight : forall seq,
     length (tokens_to_bytes seq) <= (9 * (list_sum (map symb_weight seq))) / 8.
   Proof.
@@ -219,10 +220,10 @@ Module Impl.
     rewrite H.
     apply Nat.Div0.div_le_mono.
     apply Nat.mul_le_mono_l.
-    eapply chunk_lemma. lia.
+    eapply chunk_length_bound. lia.
   Admitted.
 
-  Lemma upperbound'': forall before after,
+  Lemma upperbound': forall before after,
       length (tokens_to_bytes (compress' before after 0))
       <= (9 * length after) / 8.
   Proof.                     
@@ -233,20 +234,14 @@ Module Impl.
     apply Nat.mul_le_mono_l. 
     apply H. lia.
   Qed.
-  
-  Lemma upperbound': forall s,
-    length (tokens_to_bytes (compress s)) <= (9 * length s) / 8.
-  Proof.
-    intros. eapply upperbound''.
-  Qed.
 
   Theorem upperbound: forall s,
     length (compress_to_bytes s) <= 9 * length s / 8 + 8 * Nat.log2 (length s) / 7.
   Proof.
-    unfold compress_to_bytes.
+    unfold compress_to_bytes, compress.
     intros.
     rewrite length_app.
-    pose proof (upperbound' s) as Hub.
+    pose proof (upperbound' [] s) as Hub.
     pose proof (nat_to_bytes_length (length s)) as Hl.
     lia.
   Qed.

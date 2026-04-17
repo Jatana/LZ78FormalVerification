@@ -20,7 +20,7 @@ Module Tokens.
     end.
 
   Lemma nat_to_byte_correctness : forall n,
-    0 <= n < 256 ->
+    n < 256 ->
     to_nat (nat_to_byte n) = n.
   Proof.
     unfold nat_to_byte.
@@ -123,8 +123,8 @@ Module Tokens.
     nat_to_byte ((h mod 16) * 16 + (l mod 16)).
 
   Lemma to_nat_nibbles_correct : forall h l,
-    0 <= h < 16 ->
-    0 <= l < 16 ->
+    h < 16 ->
+    l < 16 ->
     to_nat (nibbles_to_byte h l) = h * 16 + l.
   Proof.
     unfold nibbles_to_byte, nat_to_byte.
@@ -151,9 +151,6 @@ Module Tokens.
         let b1 := nat_to_byte (off_opt mod 256) in
         [b0; b1]
     end.
-  
-  (* Inductive tokens_to_bytes_chunk_len (n : nat) (flag : nat) (l : nat) :=
-    |  *)
 
   Fixpoint tokens_to_bytes_chunk_len (ts: list Token) (n: nat) (flag: nat) :=
     match n, ts with
@@ -176,6 +173,24 @@ Module Tokens.
                      | Ref _ _ => flag * 2 end
         in tokens_to_bytes_chunk tl pn flag' (acc ++ token_to_bytes t)
     end.
+
+  Lemma tokens_to_bytes_chunk_len_correctness: forall ts n flag flag_byte tail acc_in acc,
+    tokens_to_bytes_chunk ts n flag acc_in = (flag_byte, tail, acc) ->
+    length acc_in + tokens_to_bytes_chunk_len ts n flag = length acc.
+  Proof.
+    induction ts; simpl; intros.
+    - destruct n; injection H as <- <-; subst; lia.
+    - destruct n.
+      + injection H as <- <-. subst. lia.
+      + destruct a; simpl in *.
+        * specialize (IHts n (flag * 2 + 1) flag_byte tail (acc_in ++ [b]) acc H).
+          rewrite length_app in IHts. simpl in IHts. lia.
+        * match goal with
+          | [ H: context[[?gb0; ?gb1]] |- _ ] => set (b0 := gb0); set (b1 := gb1)
+          end.
+          specialize (IHts n (flag * 2) flag_byte tail (acc_in ++ [b0; b1]) acc H).
+          rewrite length_app in IHts. simpl in IHts. lia.
+  Qed.
 
   Fixpoint tokens_to_bytes_fueled (tokens: list Token) (fuel: nat): list byte :=
     match fuel, tokens with
@@ -254,35 +269,54 @@ Module Tokens.
     Lit "005"; Lit "006"; Lit "007"; Lit "008"; Lit "009"; Ref 5 1000].
   Proof. reflexivity. Qed.
 
-  Lemma token_encode_decode_correctness: forall t rest,
+  Lemma to_token_correctness: forall t rest,
     valid_token t ->
     bytes_to_token (token_to_bytes t ++ rest)
                    (match t with Lit _ => true | Ref _ _ => false end) = (Some t, rest).
-  Proof. (* Brute force proof takes too long... *)
-  (*  intros.*)
-  (*  destruct t.*)
-  (*  - reflexivity.*)
-  (*  - simpl in H |- *.*)
-  (*    apply pair_equal_spec.*)
-  (*    split; [f_equal | reflexivity].*)
-  (*    pose proof (Nat.divmod_spec (offset - 3) 255 0 255 ltac:(lia)) as Hdiv1.*)
-  (*    destruct (Nat.divmod (offset - 3) 255 0 255) as [q'1 u'1]. simpl.*)
-  (*    rewrite (to_nat_nibbles_correct (length - 3) q'1 ltac:(lia) ltac:(lia)).*)
-  (*    pose proof (Nat.divmod_spec ((length - 3) * 16 + q'1) 15 0 15 ltac:(lia)) as Hdiv2.*)
-  (*    destruct (Nat.divmod ((length - 3) * 16 + q'1) 15 0 15) as [q'2 u'2]. simpl.*)
-  (*    f_equal.*)
-  (*    + lia.*)
-  (*    + repeat match goal with*)
-  (*      | [ |- context[to_nat (nat_to_byte match ?e with _ => _ end)] ] => destruct e*)
-  (*      | [ |- context[to_nat (nat_to_byte ?b)] ] => *)
-  (*          rewrite (nat_to_byte_correctness b ltac:(lia));*)
-  (*          repeat match goal with*)
-  (*                 | [ |- context[match ?e with _ => _ end] ] => destruct e*)
-  (*                 | [ |- _ ] => lia*)
-  (*                 end*)
-  (*      end.*)
-  (*Qed.*)
-  Admitted.
+  Proof.
+    intros.
+    destruct t.
+    - reflexivity.
+    - apply pair_equal_spec.
+      split; [f_equal | reflexivity].
+      f_equal.
+      + simpl in *.
+        pose proof (Nat.divmod_spec (offset - 3) 255 0 255 ltac:(lia)).
+        destruct (Nat.divmod (offset - 3) 255 0 255) as [q'1 u'1]. simpl.
+        rewrite (to_nat_nibbles_correct (length - 3) q'1 ltac:(lia) ltac:(lia)).
+        pose proof (Nat.divmod_spec ((length - 3) * 16 + q'1) 15 0 15 ltac:(lia)).
+        destruct (Nat.divmod ((length - 3) * 16 + q'1) 15 0 15) as [q'2 u'2]. simpl.
+        lia.
+      + unfold nibbles_to_byte.
+        pose proof (Nat.mod_upper_bound (offset - 3) 256 ltac:(lia)).
+        rewrite (nat_to_byte_correctness ((offset - 3) mod 256) ltac:(lia)).
+        assert ((length - 3) mod 16 * 16 + ((offset - 3) / 256) mod 16 < 256). {
+          pose proof (Nat.mod_upper_bound (length - 3) 16 ltac:(lia)).
+          pose proof (Nat.mod_upper_bound ((offset - 3) / 256) 16 ltac:(lia)).
+          lia.
+        }
+        rewrite (nat_to_byte_correctness ((length - 3) mod 16 * 16 + ((offset - 3) / 256) mod 16) H1).
+        unfold Nat.modulo, Nat.div.
+        pose proof (Nat.divmod_spec (length - 3) 15 0 15 ltac:(lia)).
+        destruct (Nat.divmod (length - 3) 15 0 15) as [q1 u1].
+        pose proof (Nat.divmod_spec (offset - 3) 255 0 255 ltac:(lia)).
+        destruct (Nat.divmod (offset - 3) 255 0 255) as [q2 u2].
+        assert (snd (q1, u1) = u1) by reflexivity.
+        rewrite H4. clear H4.
+        assert (snd (q2, u2) = u2) by reflexivity.
+        rewrite H4. clear H4.
+        assert (fst (q2, u2) = q2) by reflexivity.
+        rewrite H4. clear H4.
+        pose proof (Nat.divmod_spec q2 15 0 15 ltac:(lia)).
+        destruct (Nat.divmod q2 15 0 15) as [q3 u3].
+        assert (snd (q3, u3) = u3) by reflexivity.
+        rewrite H5. clear H5.
+        pose proof (Nat.divmod_spec ((15 - u1) * 16 + (15 - u3)) 15 0 15 ltac:(lia)).
+        destruct (Nat.divmod ((15 - u1) * 16 + (15 - u3)) 15 0 15) as [q4 u4].
+        assert (snd (q4, u4) = u4) by reflexivity.
+        rewrite H6. clear H6.
+        destruct H. lia.
+  Qed.
 
   Lemma chunk_remove: forall n tokens acc flag_byte tail,
     n <= 8 ->
@@ -296,21 +330,57 @@ Module Tokens.
   Proof.
   Admitted.
 
+  Lemma bytes_to_token_app: forall flag acc rest token tail,
+    bytes_to_token acc flag = (Some token, tail) ->
+    bytes_to_token (acc ++ rest) flag = (Some token, tail ++ rest).
+  Proof.
+    intros. destruct flag, acc as [| b [| b0 tailB]];
+    simpl in H; try discriminate; injection H as <- <-; reflexivity.
+  Qed.
+
   Lemma chunk_app: forall n flag acc rest tokens tail,
     bytes_to_tokens_chunk n flag acc = (tokens, tail) ->
+    length tokens = n \/ rest = [] ->
     bytes_to_tokens_chunk n flag (acc ++ rest) = (tokens, tail ++ rest).
   Proof.
-  Admitted.
+    induction n; intros.
+    - simpl in *. congruence.
+    - simpl in H.
+      destruct (bytes_to_token acc (Nat.testbit flag n)) as [otoken tailB] eqn:?, otoken.
+      + destruct (bytes_to_tokens_chunk n flag tailB) as [tokensB restB] eqn:?.
+        injection H as <- <-.
+        simpl in H0 |- *. destruct H0.
+        * injection H as H.
+          rewrite (bytes_to_token_app (Nat.testbit flag n) acc rest t tailB Heqp).
+          rewrite (IHn flag tailB rest tokensB restB Heqp0); auto.
+        * subst.
+          repeat rewrite app_nil_r.
+          rewrite Heqp, Heqp0. reflexivity.
+      + injection H as <- <-.
+        simpl in H0. destruct H0.
+        * discriminate.
+        * subst. simpl.
+          repeat rewrite app_nil_r.
+          rewrite Heqp. reflexivity.
+  Qed.
 
-  Lemma to_token_chunk_correctness: forall n tokens acc flag_byte tail,
+  Lemma to_tokens_chunk_correctness: forall n tokens acc flag flag_byte,
     n <= 8 ->
     Forall valid_token tokens ->
-    tokens_to_bytes_chunk tokens n 0 [] = (flag_byte, tail, acc) ->
-    bytes_to_tokens_chunk n (to_nat flag_byte) (acc) = (tokens, []).
+    length tokens <= n ->
+    tokens_to_bytes_chunk tokens n flag [] = (flag_byte, [], acc) ->
+    bytes_to_tokens_chunk n (to_nat flag_byte) acc = (tokens, []).
   Proof.
+    induction n; intros.
+    - destruct tokens; simpl in *.
+      + congruence.
+      + discriminate.
+    - destruct tokens; simpl in *.
+      + injection H2 as <- <-.
+
   Admitted.
 
-  Lemma to_token_fueled_correctness: forall fuel1 fuel2 t l,
+  Lemma to_tokens_fueled_correctness: forall fuel1 fuel2 t l,
     Forall valid_token t ->
     length t <= fuel1 ->
     tokens_to_bytes_fueled t fuel1 = l ->
@@ -342,8 +412,20 @@ Module Tokens.
           assert (flag = b) by congruence. subst.
           injection H1 as H1.
           pose proof (chunk_remove 8 (t :: t0) bytes b restT ltac:(lia) H Heqp) as [prev [Heqpv [Hf [Hl Ht]]]].
-          pose proof (to_token_chunk_correctness 8 prev bytes b [] ltac:(lia) Hf Ht).
-          pose proof (chunk_app 8 (to_nat b) bytes (tokens_to_bytes_fueled restT fuel1) prev [] H3).
+          pose proof (to_tokens_chunk_correctness 8 prev bytes 0 b ltac:(lia) Hf ltac:(lia) Ht).
+          assert (Hor: length prev = 8 \/ tokens_to_bytes_fueled restT fuel1 = []). {
+            destruct (Nat.min_dec 8 (length (t :: t0))).
+            - left. lia.
+            - right.
+              assert (restT = []). {
+                rewrite Heqpv, length_app, Hl in H0.
+                destruct restT.
+                - reflexivity.
+                - rewrite e, Heqpv, length_app in Hl. simpl in Hl. lia.
+              }
+              subst. destruct fuel1; reflexivity.
+          }
+          pose proof (chunk_app 8 (to_nat b) bytes (tokens_to_bytes_fueled restT fuel1) prev [] H3 Hor).
           rewrite app_nil_l in H4.
           assert (prev = tokens) by congruence. subst.
           rewrite Heqpv, app_inv_head_iff.
@@ -364,13 +446,13 @@ Module Tokens.
           exact (IHfuel1 fuel2 restT tail H1 H5 ltac:(congruence) H6).
   Qed.
 
-  Theorem to_token_correctness: forall t,
+  Theorem to_tokens_correctness: forall t,
     Forall valid_token t ->
     bytes_to_tokens (tokens_to_bytes t) = t.
   Proof.
     intros.
     unfold bytes_to_tokens, tokens_to_bytes.
-    eapply to_token_fueled_correctness; trivial.
+    eapply to_tokens_fueled_correctness; trivial.
   Qed.
 
 End Tokens.
