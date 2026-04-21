@@ -195,35 +195,45 @@ Module Impl.
         simpl in H. lia.
   Qed.
 
-  (* This lemma is too weak... *)
-  Lemma chunk_length_bound': forall seq n fl,
-      n <= 8 ->
-      (tokens_to_bytes_chunk_len seq n fl) <= ((list_sum (map symb_weight seq))).
+  Lemma chunk_length_bound': forall seq n,
+    n <= 8 ->
+    (tokens_to_bytes_chunk_len seq n) <= ((list_sum (map symb_weight seq))).
   Proof.
     induction seq; intros; simpl.
     - destruct n; lia.
     - destruct n. 
-      -- lia.
-      -- destruct a; simpl.
-         --- replace (tokens_to_bytes_chunk_len seq n (fl * 2 + 1) + 1)
-               with (S (tokens_to_bytes_chunk_len seq n (fl * 2 + 1))) by lia.
-             apply le_n_S. eapply IHseq. simpl in H. lia. 
-         --- replace (tokens_to_bytes_chunk_len seq n (fl * 2) + 2)
-               with (S (S (tokens_to_bytes_chunk_len seq n (fl * 2)))) by lia.
-             do 2 apply le_n_S. etransitivity. eapply IHseq. simpl in H. lia.
-             lia.                      
+      + lia.
+      + destruct a; simpl.
+        * replace (tokens_to_bytes_chunk_len seq n + 1)
+          with (S (tokens_to_bytes_chunk_len seq n)) by lia.
+          apply le_n_S. eapply IHseq. simpl in H. lia. 
+        * replace (tokens_to_bytes_chunk_len seq n + 2)
+          with (S (S (tokens_to_bytes_chunk_len seq n))) by lia.
+          do 2 apply le_n_S. etransitivity. eapply IHseq. simpl in H. lia.
+          lia.
   Qed.
 
-  (* This will use the above lemma, tokens_to_bytes_chunk_len_correctness and
-     chunk_remove which remains to be proven. *)
   Lemma chunk_length_bound: forall tokens n acc flag_byte tail,
     n <= 8 ->
-    tokens_to_bytes_chunk tokens n 0 [] = (flag_byte, tail, acc) ->
+    tokens_to_bytes_chunk tokens n = (flag_byte, tail, acc) ->
     exists prev,
       tokens = prev ++ tail /\
       (tail = [] \/ length prev = n) /\
       length acc <= (list_sum (map symb_weight prev)).
   Proof.
+    intros.
+    assert (Forall valid_token tokens) by admit.
+    pose proof (chunk_remove tokens n acc flag_byte tail H H1 H0).
+    destruct H2 as [prev [He [Hv [Hl Ht]]]].
+    exists prev.
+    repeat split.
+    - assumption.
+    - destruct tail.
+      + left. reflexivity.
+      + right. rewrite He, length_app in Hl.
+        simpl in Hl. lia.
+    - pose proof (chunk_length_bound' prev n H).
+      now rewrite <- (tokens_to_bytes_chunk_len_correctness prev n flag_byte [] acc Ht).
   Admitted.
 
   Lemma tokens_to_bytes_bounded_by_weight : forall fuel tokens,
@@ -235,7 +245,7 @@ Module Impl.
     - destruct tokens.
       + simpl. lia.
       + unfold tokens_to_bytes_fueled.
-        destruct (tokens_to_bytes_chunk (t :: tokens) 8 0 []) as [[flag tail] acc] eqn:?.
+        destruct (tokens_to_bytes_chunk (t :: tokens) 8) as [[flag tail] acc] eqn:?.
         simpl length. rewrite length_app.
         destruct (chunk_length_bound (t :: tokens) 8 acc flag tail ltac:(lia) Heqp) as (prev & Ht & Hor & Hl).
         simpl in H.
