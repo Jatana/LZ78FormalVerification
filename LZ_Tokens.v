@@ -115,10 +115,52 @@ Module Tokens.
     lia.
   Qed.
 
-  Lemma nat_to_bytes_length: forall n,
-    length (nat_to_bytes n) <= 8 * (Nat.log2 n) / 7.
+  Lemma nat_to_bytes_length': forall n fuel,
+    length (nat_to_bytes_fueled fuel n) <= Nat.log2 n / 7 + 1.
   Proof.
-  Admitted.
+    induction n as [n IHn] using lt_wf_rec; intros.
+    destruct n, fuel; simpl; try lia.
+    destruct (S n <? 128) eqn:?; simpl; try lia.
+    apply Nat.ltb_ge in Heqb.
+    set (lhs := S (length (nat_to_bytes_fueled fuel (S n / 128)))).
+    set (rhs := Nat.log2 (S n) / 7 + 1).
+    match goal with
+    | [ |- ?l <= ?r ] =>
+        assert (Heq: l = lhs) by reflexivity; rewrite Heq; clear Heq;
+        assert (Heq: r = rhs) by reflexivity; rewrite Heq; clear Heq
+    end.
+    assert (Hdiv: S n / 128 < S n) by (apply Nat.div_lt; lia).
+    assert (Hlog: Nat.log2 (S n / 128) = Nat.log2 (S n) - 7). {
+      destruct n.
+      - simpl. lia.
+      - assert (128 = 2 ^ 7) by reflexivity.
+        rewrite H, <- Nat.shiftr_div_pow2, Nat.log2_shiftr.
+        reflexivity.
+    }
+    specialize (IHn (S n / 128) Hdiv fuel).
+    assert (Hm: lhs <= Nat.log2 (S n / 128) / 7 + 1 + 1) by lia.
+    rewrite Hlog in *.
+
+    etransitivity.
+    - exact Hm.
+    - apply Nat.add_le_mono_r.
+      set (m := Nat.log2 (S n)).
+      assert (7 <= m). {
+        assert (Nat.log2 128 <= m) by now apply Nat.log2_le_mono.
+        unfold Nat.log2 in H.
+        now simpl in H.
+      }
+      simpl.
+      pose proof (Nat.divmod_spec (m - 7) 6 0 6 ltac:(lia)).
+      destruct (Nat.divmod (m - 7) 6 0 6) as [q u].
+      pose proof (Nat.divmod_spec m 6 0 6 ltac:(lia)).
+      destruct (Nat.divmod m 6 0 6) as [q' u'].
+      simpl. lia.
+  Qed.
+
+  Lemma nat_to_bytes_length: forall n,
+    length (nat_to_bytes n) <= Nat.log2 n / 7 + 1.
+  Proof. intro n. exact (nat_to_bytes_length' n n). Qed.
 
   Definition nibbles_to_byte (h l: nat): byte :=
     nat_to_byte ((h mod 16) * 16 + (l mod 16)).

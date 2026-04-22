@@ -173,6 +173,14 @@ Module Impl.
     exact H.
   Qed.
 
+  Theorem correctness_full: forall s,
+    decompress (bytes_to_tokens (tokens_to_bytes (compress s))) = s.
+  Proof.
+    intros.
+    rewrite to_tokens_correctness.
+    - apply correctness.
+    - apply compress_valid.
+  Qed.
 
   Definition compress_to_bytes s :=
     nat_to_bytes (length s) ++ (tokens_to_bytes (compress s)).
@@ -347,7 +355,7 @@ Module Impl.
   Qed.
 
   Theorem upperbound: forall s,
-    length (compress_to_bytes s) <= (9 * length s + 7) / 8 + 8 * Nat.log2 (length s) / 7.
+    length (compress_to_bytes s) <= (9 * length s + 7) / 8 + Nat.log2 (length s) / 7 + 1.
   Proof.
     unfold compress_to_bytes, compress.
     intros.
