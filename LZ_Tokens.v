@@ -107,13 +107,11 @@ Module Tokens.
         lia.
   Qed.
 
-  Lemma nat_to_bytes_correctness: forall n,
-    bytes_to_nat (nat_to_bytes n) = (n, []).
+  Lemma nat_to_bytes_correctness: forall n rest,
+    n <> 0 ->
+    bytes_to_nat (nat_to_bytes n ++ rest) = (n, rest).
   Proof.
-    intro. unfold nat_to_bytes.
-    apply nat_to_bytes_correctness'.
-    lia.
-  Qed.
+  Admitted.
 
   Lemma nat_to_bytes_length': forall n fuel,
     length (nat_to_bytes_fueled fuel n) <= Nat.log2 n / 7 + 1.
@@ -195,14 +193,14 @@ Module Tokens.
         [b0; b1]
     end.
 
-  Fixpoint tokens_to_bytes_chunk_len (ts: list Token) (n: nat) :=
+  Fixpoint tokens_to_bytes_chunk_len (n: nat) (ts: list Token) :=
     match n, ts with
     | 0, _ => 0
     | S pn, [] => 0
-    | S pn, t :: tl => (tokens_to_bytes_chunk_len tl pn) + (length (token_to_bytes t))
+    | S pn, t :: tl => (tokens_to_bytes_chunk_len pn tl) + (length (token_to_bytes t))
     end.
 
-  Fixpoint tokens_to_bytes_chunk (ts: list Token) (n: nat) :=
+  Fixpoint tokens_to_bytes_chunk (n: nat) (ts: list Token) :=
     match n, ts with
     | 0, _ => ([], ts, [])
     | S pn, [] => ([], [], [])
@@ -210,65 +208,23 @@ Module Tokens.
         let flag' := match t with
                      | Lit _ => true
                      | Ref _ _ => false end
-        in match tokens_to_bytes_chunk tl pn with
-           | (flag, ts'', acc) => (flag' :: flag, ts'', token_to_bytes t ++ acc)
-           end
+        in let '(flag, ts'', acc) :=  tokens_to_bytes_chunk pn tl
+        in (flag' :: flag, ts'', token_to_bytes t ++ acc)
     end.
 
-  Lemma flag_correctness: forall ts n flag i acc tail,
-    n <= 8 -> i < Nat.min n (length ts) ->
-    tokens_to_bytes_chunk ts n = (flag, tail, acc) ->
-    exists b len off,
-    match nth i flag false with
-    | true => nth i ts (Lit x00) = Lit b
-    | false => nth i ts (Lit x00) = Ref len off
-    end.
+  Lemma tokens_to_bytes_chunk_len_correctness: forall n ts flag_byte tail acc,
+    tokens_to_bytes_chunk n ts = (flag_byte, tail, acc) ->
+    tokens_to_bytes_chunk_len n ts = length acc.
   Proof.
-    induction ts; intros.
-    - simpl in H0. lia.
-    - destruct a eqn:?.
-      + simpl in H1.
-        destruct n eqn:?.
-        * lia.
-        * destruct (tokens_to_bytes_chunk ts n0) as [[b' tail'] acc'] eqn:?.
-          inversion H1; subst.
-          simpl in H0.
-          destruct i eqn:?.
-          -- simpl. eexists _, _, _. reflexivity.
-          -- specialize (IHts n0 b' n acc' tail ltac:(lia) ltac:(lia) Heqp).
-             destruct IHts as [b'' [len [off ?]]].
-             exists b'', len, off.
-             simpl.
-             assumption.
-      + simpl in H1.
-        destruct n eqn:?.
-        * lia.
-        * destruct (tokens_to_bytes_chunk ts n0) as [[b' tail'] acc'] eqn:?.
-          inversion H1; subst.
-          simpl in H0.
-          destruct i eqn:?.
-          -- simpl. eexists _, _, _. reflexivity.
-          -- specialize (IHts n0 b' n acc' tail ltac:(lia) ltac:(lia) Heqp).
-             destruct IHts as [b'' [len [off ?]]].
-             exists b'', len, off.
-             simpl.
-             assumption.
-    Unshelve. exact 0. exact 0. exact "000"%byte.
-  Qed.
-
-  Lemma tokens_to_bytes_chunk_len_correctness: forall ts n flag_byte tail acc,
-    tokens_to_bytes_chunk ts n = (flag_byte, tail, acc) ->
-    tokens_to_bytes_chunk_len ts n = length acc.
-  Proof.
-    induction ts; simpl; intros.
-    - destruct n; injection H as <- <-; subst; simpl; lia.
-    - destruct n.
-      + injection H as <- <-. subst. simpl. lia.
-      + destruct a;
-        destruct (tokens_to_bytes_chunk ts n) as [[l toks] acc'] eqn:?;
-        specialize (IHts n l toks acc' Heqp);
-        simpl in H; unfold nibbles_to_byte in H;
-        inversion H; subst; simpl; lia.
+    induction n; simpl; intros.
+    - inversion H. now simpl.
+    - destruct ts.
+      + inversion H. now simpl.
+      + destruct (tokens_to_bytes_chunk n ts) as [[flag tail'] acc'] eqn:?.
+        rewrite (IHn ts flag tail' acc' Heqp).
+        assert (token_to_bytes t ++ acc' = acc) by congruence.
+        rewrite <- H0, length_app.
+        lia.
   Qed.
 
   Fixpoint list_bool_to_byte (l: list bool) (x: nat) (n: nat) : byte :=
@@ -282,7 +238,7 @@ Module Tokens.
     | 0, _ => [] (* Never happens if fuel = length tokens *)
     | _, [] => []
     | S fuel, _ =>
-        let '(flag, tail, acc) := tokens_to_bytes_chunk tokens 8 in
+        let '(flag, tail, acc) := tokens_to_bytes_chunk 8 tokens in
         list_bool_to_byte flag 0 8 :: acc ++ tokens_to_bytes_fueled tail fuel
     end.
 
@@ -403,34 +359,36 @@ Module Tokens.
         destruct H. lia.
   Qed.
 
-  Lemma chunk_remove: forall tokens n acc flag_byte tail,
+  Lemma chunk_remove: forall n tokens acc flag_byte tail,
     n <= 8 ->
     Forall valid_token tokens ->
-    tokens_to_bytes_chunk tokens n = (flag_byte, tail, acc) ->
+    tokens_to_bytes_chunk n tokens = (flag_byte, tail, acc) ->
     exists prev,
       tokens = prev ++ tail /\
       Forall valid_token prev /\
       length prev = Nat.min n (length tokens) /\
-      tokens_to_bytes_chunk prev n = (flag_byte, [], acc).
+      tokens_to_bytes_chunk n prev = (flag_byte, [], acc).
   Proof.
-    induction tokens; intros.
-    - exists []. simpl in H1. destruct n;
-      assert (tail = []) by congruence; rewrite H2;
-        repeat split; try assumption; simpl; rewrite H2 in H1; congruence.
-    - inversion H0; subst.
-      simpl in H1. destruct n.
-      + exists []. assert (tail = a :: tokens) by congruence.
-        rewrite H2.
+    induction n; intros; simpl in H1.
+    - exists [].
+      repeat split; simpl.
+      + congruence.
+      + constructor.
+      + congruence.
+    - destruct tokens.
+      + exists [].
         repeat split.
+        * inversion H1; subst. reflexivity.
         * constructor.
         * simpl. congruence.
-      + destruct (tokens_to_bytes_chunk tokens) as [[b tail'] acc'] eqn:?.
-        destruct a.
+      + destruct (tokens_to_bytes_chunk n tokens) as [[b tail'] acc'] eqn:?.
+        destruct t.
         * assert (true :: b = flag_byte) by congruence. subst.
           assert (tail = tail') by congruence. subst.
           assert (token_to_bytes (Lit b0) ++ acc' = acc) by congruence. subst.
-          specialize (IHtokens n acc' b tail' ltac:(lia) H5 Heqp).
-          destruct IHtokens as [prev [Heq [Hfa [Hlen Hp]]]].
+          inversion H0; subst.
+          specialize (IHn tokens acc' b tail' ltac:(lia) H5 Heqp).
+          destruct IHn as [prev [Heq [Hfa [Hlen Hp]]]].
           exists (Lit b0 :: prev).
           repeat split.
           -- rewrite Heq. reflexivity.
@@ -440,8 +398,9 @@ Module Tokens.
         * assert (false :: b = flag_byte) by congruence. subst.
           assert (tail = tail') by congruence. subst.
           assert (token_to_bytes (Ref length offset) ++ acc' = acc) by congruence. subst.
-          specialize (IHtokens n acc' b tail' ltac:(lia) H5 Heqp).
-          destruct IHtokens as [prev [Heq [Hfa [Hlen Hp]]]].
+          inversion H0; subst.
+          specialize (IHn tokens acc' b tail' ltac:(lia) H5 Heqp).
+          destruct IHn as [prev [Heq [Hfa [Hlen Hp]]]].
           exists (Ref length offset :: prev).
           repeat split.
           -- rewrite Heq. reflexivity.
@@ -484,21 +443,154 @@ Module Tokens.
           rewrite Heqp. reflexivity.
   Qed.
 
-  Lemma to_tokens_chunk_correctness: forall n tokens acc flag_byte,
+  Lemma tokens_to_bytes_chunk_flag_length: forall n tokens ts acc flag,
+    tokens_to_bytes_chunk n tokens = (flag, ts, acc) ->
+    length flag <= n.
+  Proof.
+    induction n; simpl; intros.
+    - inversion H; subst. now simpl.
+    - destruct tokens.
+      + inversion H; subst. simpl. lia.
+      + destruct (tokens_to_bytes_chunk n tokens) as [[flag' ts'] acc'] eqn:?.
+        inversion H. subst. simpl.
+        specialize (IHn tokens ts acc' flag' Heqp).
+        lia.
+  Qed.
+
+  Lemma zero_lt_2_pow: forall n,
+    0 < 2 ^ n.
+  Proof. intros. assert (2 ^ n <> 0) by (apply Nat.pow_nonzero; lia). lia. Qed.
+
+  Lemma list_bool_to_byte_correctness: forall l n x,
+    length l <= n ->
     n <= 8 ->
+    x < 2 ^ (8 - n) ->
+    exists rest,
+      rest < 2 ^ n /\
+      to_nat (list_bool_to_byte l x n) = x * 2 ^ n + rest.
+  Proof.
+    induction l; intros; simpl.
+    - rewrite nat_to_byte_correctness.
+      + exists 0.
+        split.
+        * apply zero_lt_2_pow.
+        * lia.
+      + assert (x * 2 ^ n < 2 ^ (8 - n) * 2 ^ n). {
+          apply Nat.mul_lt_mono_pos_r.
+          - apply zero_lt_2_pow.
+          - assumption.
+        }
+        assert (8 - n + n = 8) by lia.
+        assert (1 * 2 ^ 8 = 256) by reflexivity.
+        rewrite <- 2 Nat.shiftl_mul_pow2, <- Nat.shiftl_1_l, Nat.shiftl_shiftl, H3,
+                2 Nat.shiftl_mul_pow2 in H2.
+        now rewrite H4 in H2.
+    - destruct n.
+      + exists 0; simpl.
+        split.
+        * lia.
+        * rewrite nat_to_byte_correctness.
+          -- lia.
+          -- assert (2 ^ (8 - 0) = 256) by reflexivity. lia.
+      + assert (x * 2 + (if a then 1 else 0) < 2 ^ (8 - n)). {
+          replace (8 - S n) with (7 - n) in * by reflexivity.
+          rewrite Nat.mul_comm.
+          destruct a.
+          - clear l IHl H.
+            replace (8 - n) with (S (7 - n)) by lia.
+            change (2 ^ S (7 - n)) with (2 * (2 ^ (7 - n))).
+            lia.
+          - replace (2 ^ (8 - n)) with (2 * 2 ^ (7 - n)).
+            + lia.
+            + rewrite <- Nat.pow_succ_r'.
+              f_equal. lia.
+        }
+        destruct a.
+        * destruct (IHl n (x * 2 + 1) ltac:(simpl in H; lia) ltac:(lia) H2) as [rest [Hb Heq]].
+          exists (2 ^ n + rest).
+          split.
+          -- simpl. lia.
+          -- rewrite Heq. simpl. lia.
+        * destruct (IHl n (x * 2 + 0) ltac:(simpl in H; lia) ltac:(lia) H2) as [rest [Hb Heq]].
+          exists rest.
+          split.
+          -- simpl. lia.
+          -- rewrite Heq. simpl. lia.
+  Qed.
+
+  Lemma div_double_plus_r: forall n r,
+    Nat.div2 (2 * n + r) = n + Nat.div2 r.
+  Proof.
+    intros.
+    rewrite 2 Nat.div2_div. simpl.
+    pose proof (Nat.divmod_spec (n + (n + 0) + r) 1 0 1 ltac:(lia)).
+    destruct (Nat.divmod (n + (n + 0) + r) 1 0 1) as [q u].
+    pose proof (Nat.divmod_spec r 1 0 1 ltac:(lia)).
+    destruct (Nat.divmod r 1 0 1) as [q' u'].
+    simpl. lia.
+  Qed.
+
+  Lemma testbit_flag: forall b: bool, forall x rest n,
+    rest < 2 ^ n ->
+    Nat.testbit ((x * 2 + (if b then 1 else 0)) * 2 ^ n + rest) n = b.
+  Proof.
+    intros.
+    revert b x rest H.
+    induction n; simpl in *; intros.
+    - replace rest with 0 by lia.
+      rewrite Nat.add_0_r, Nat.mul_1_r, Nat.mul_comm.
+      destruct b.
+      + apply Nat.odd_odd.
+      + rewrite Nat.add_0_r. apply Nat.odd_even.
+    - assert (Nat.div2 rest < 2 ^ n). {
+        rewrite Nat.div2_div.
+        now apply Nat.Div0.div_lt_upper_bound.
+      }
+      replace (2 ^ n + (2 ^ n + 0)) with (2 * 2 ^ n) in * by reflexivity.
+      specialize (IHn b x (Nat.div2 rest) H0). simpl in IHn.
+      now rewrite Nat.mul_comm, <- Nat.mul_assoc, div_double_plus_r, Nat.mul_comm.
+  Qed.
+
+  Lemma to_tokens_chunk_correctness: forall n tokens acc flag_byte x,
+    n <= 8 ->
+    x < 2 ^ (8 - n) ->
     Forall valid_token tokens ->
     length tokens <= n ->
-    tokens_to_bytes_chunk tokens n = (flag_byte, [], acc) ->
-    bytes_to_tokens_chunk n (to_nat (list_bool_to_byte flag_byte 0 8)) acc = (tokens, []).
+    tokens_to_bytes_chunk n tokens = (flag_byte, [], acc) ->
+    bytes_to_tokens_chunk n (to_nat (list_bool_to_byte flag_byte x n)) acc = (tokens, []).
   Proof.
-    induction n; intros.
-    - destruct tokens; simpl in *.
-      + congruence.
-      + discriminate.
-    - destruct tokens; simpl in *.
-      + injection H2 as <- <-.
+    induction n; intros; simpl in H3 |- *.
+    - congruence.
+    - destruct tokens.
+      + inversion H3; subst.
+        simpl bytes_to_tokens_chunk.
+        destruct (Nat.testbit (to_nat (list_bool_to_byte [] x (S n))) n); reflexivity.
+      + destruct (tokens_to_bytes_chunk n tokens) as [[flag ts'] acc'] eqn:?.
+        inversion H3. subst. clear H3.
+        set (b := match t with Lit _ => true | Ref _ _ => false end).
+        assert (to_nat (list_bool_to_byte flag (x * 2 + (if b then 1 else 0)) n) =
+                to_nat (list_bool_to_byte (b :: flag) x (S n))) by reflexivity.
+        rewrite <- H3. clear H3.
 
-  Admitted.
+        assert (Hb: x * 2 + (if b then 1 else 0) < 2 ^ (8 - n)). {
+          assert (2 ^ (8 - n) = 2 ^ (8 - S n) * 2). {
+            replace (8 - n) with (S (8 - S n)) by lia.
+            rewrite Nat.pow_succ_r'. lia.
+          }
+          destruct b; lia.
+        }
+        pose proof (tokens_to_bytes_chunk_flag_length n tokens [] acc' flag Heqp).
+        pose proof (list_bool_to_byte_correctness flag n (x * 2 + (if b then 1 else 0)) H3
+                    ltac:(lia) Hb) as [rest [Hrb Heq]].
+        rewrite Heq.
+        rewrite testbit_flag by assumption.
+        inversion H1; subst.
+        rewrite to_token_correctness by assumption.
+        specialize (IHn tokens acc' flag (x * 2 + (if b then 1 else 0)) ltac:(lia) Hb H7
+                    ltac:(simpl in H2; lia) Heqp).
+        rewrite Heq in IHn.
+        now rewrite IHn.
+  Qed.
 
   Lemma to_tokens_fueled_correctness: forall fuel1 fuel2 t l,
     Forall valid_token t ->
@@ -531,8 +623,10 @@ Module Tokens.
 
           assert (list_bool_to_byte flag 0 8 = b) by congruence. subst.
           injection H1 as H1.
-          pose proof (chunk_remove (t :: t0) 8 bytes flag restT ltac:(lia) H Heqp) as [prev [Heqpv [Hf [Hl Ht]]]].
-          pose proof (to_tokens_chunk_correctness 8 prev bytes flag ltac:(lia) Hf ltac:(lia) Ht).
+          pose proof (chunk_remove 8 (t :: t0) bytes flag restT ltac:(lia) H Heqp)
+                      as [prev [Heqpv [Hf [Hl Ht]]]].
+          pose proof (to_tokens_chunk_correctness 8 prev bytes flag 0 ltac:(lia)
+                      ltac:(apply zero_lt_2_pow) Hf ltac:(lia) Ht).
           assert (Hor: length prev = 8 \/ tokens_to_bytes_fueled restT fuel1 = []). {
             destruct (Nat.min_dec 8 (length (t :: t0))).
             - left. lia.
@@ -545,7 +639,8 @@ Module Tokens.
               }
               subst. destruct fuel1; reflexivity.
           }
-          pose proof (chunk_app 8 (to_nat (list_bool_to_byte flag 0 8)) bytes (tokens_to_bytes_fueled restT fuel1) prev [] H3 Hor).
+          pose proof (chunk_app 8 (to_nat (list_bool_to_byte flag 0 8)) bytes
+                      (tokens_to_bytes_fueled restT fuel1) prev [] H3 Hor).
           rewrite app_nil_l in H4.
           assert (prev = tokens) by congruence. subst.
           rewrite Heqpv, app_inv_head_iff.

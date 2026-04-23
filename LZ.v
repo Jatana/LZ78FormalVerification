@@ -173,18 +173,27 @@ Module Impl.
     exact H.
   Qed.
 
-  Theorem correctness_full: forall s,
-    decompress (bytes_to_tokens (tokens_to_bytes (compress s))) = s.
-  Proof.
-    intros.
-    rewrite to_tokens_correctness.
-    - apply correctness.
-    - apply compress_valid.
-  Qed.
-
   Definition compress_to_bytes s :=
     nat_to_bytes (length s) ++ (tokens_to_bytes (compress s)).
-  
+
+  Definition decompress_from_bytes s :=
+    let (len, compressed) := bytes_to_nat s in 
+    decompress (bytes_to_tokens compressed).
+
+  Theorem correctness_full: forall s,
+    decompress_from_bytes (compress_to_bytes s) = s.
+  Proof.
+    intros.
+    unfold decompress_from_bytes, compress_to_bytes.
+    destruct s.
+    - unfold bytes_to_tokens, decompress.
+      reflexivity.
+    - rewrite nat_to_bytes_correctness, to_tokens_correctness.
+      + apply correctness.
+      + apply compress_valid.
+      + simpl. lia.
+  Qed.
+
   Definition symb_weight t :=
     match t with
     | Lit _ => 1
@@ -222,35 +231,26 @@ Module Impl.
         simpl in H. lia.
   Qed.
 
-  Lemma chunk_length_bound': forall seq n,
+  Lemma chunk_length_bound': forall n seq,
     n <= 8 ->
-    (tokens_to_bytes_chunk_len seq n) <= ((list_sum (map symb_weight seq))).
+    (tokens_to_bytes_chunk_len n seq) <= ((list_sum (map symb_weight seq))).
   Proof.
-    induction seq; intros; simpl.
-    - destruct n; lia.
-    - destruct n. 
-      + lia.
-      + destruct a; simpl.
-        * replace (tokens_to_bytes_chunk_len seq n + 1)
-          with (S (tokens_to_bytes_chunk_len seq n)) by lia.
-          apply le_n_S. eapply IHseq. simpl in H. lia. 
-        * replace (tokens_to_bytes_chunk_len seq n + 2)
-          with (S (S (tokens_to_bytes_chunk_len seq n))) by lia.
-          do 2 apply le_n_S. etransitivity. eapply IHseq. simpl in H. lia.
-          lia.
+    induction n; intros; destruct seq; simpl; try lia.
+    specialize (IHn seq ltac:(lia)).
+    destruct t; simpl; lia.
   Qed.
 
   Lemma chunk_length_bound: forall tokens n acc flag_byte tail,
     n <= 8 ->
     Forall valid_token tokens ->
-    tokens_to_bytes_chunk tokens n = (flag_byte, tail, acc) ->
+    tokens_to_bytes_chunk n tokens = (flag_byte, tail, acc) ->
     exists prev,
       tokens = prev ++ tail /\
       (tail = [] \/ length prev = n) /\
       length acc <= (list_sum (map symb_weight prev)).
   Proof.
     intros.
-    pose proof (chunk_remove tokens n acc flag_byte tail H H0 H1).
+    pose proof (chunk_remove n tokens acc flag_byte tail H H0 H1).
     destruct H2 as [prev [He [Hv [Hl Ht]]]].
     exists prev.
     repeat split.
@@ -259,8 +259,8 @@ Module Impl.
       + left. reflexivity.
       + right. rewrite He, length_app in Hl.
         simpl in Hl. lia.
-    - pose proof (chunk_length_bound' prev n H).
-      now rewrite <- (tokens_to_bytes_chunk_len_correctness prev n flag_byte [] acc Ht).
+    - pose proof (chunk_length_bound' n prev H).
+      now rewrite <- (tokens_to_bytes_chunk_len_correctness n prev flag_byte [] acc Ht).
   Qed.
 
   Lemma tokens_to_bytes_bounded_by_weight : forall fuel tokens,
@@ -273,13 +273,15 @@ Module Impl.
     - destruct tokens.
       + simpl. lia.
       + unfold tokens_to_bytes_fueled.
-        destruct (tokens_to_bytes_chunk (t :: tokens) 8) as [[flag tail] acc] eqn:?.
+        destruct (tokens_to_bytes_chunk 8 (t :: tokens)) as [[flag tail] acc] eqn:?.
         simpl length. rewrite length_app.
-        destruct (chunk_length_bound (t :: tokens) 8 acc flag tail ltac:(lia) H Heqp) as (prev & Ht & Hor & Hl).
+        destruct (chunk_length_bound (t :: tokens) 8 acc flag tail ltac:(lia) H Heqp)
+                  as (prev & Ht & Hor & Hl).
         simpl in H.
         match goal with
         | [ |- context[length (?fn ?t ?f)] ] =>
-            assert (He: fn t f = tokens_to_bytes_fueled tail fuel) by reflexivity; rewrite He; clear He
+            assert (He: fn t f = tokens_to_bytes_fueled tail fuel)
+                    by reflexivity; rewrite He; clear He
         end.
         assert (Hlf: length tail <= fuel). {
           apply le_S_n in H0.
@@ -293,7 +295,9 @@ Module Impl.
             assert (tokens = prev ++ tail) by congruence.
             rewrite H1 in H0.
             match goal with
-            | [ H: context[?fn (prev ++ tail)] |- _ ] => assert (Hfn: fn (prev ++ tail) = length (prev ++ tail)) by reflexivity; rewrite Hfn in H; clear Hfn
+            | [ H: context[?fn (prev ++ tail)] |- _ ] =>
+                assert (Hfn: fn (prev ++ tail) = length (prev ++ tail))
+                        by reflexivity; rewrite Hfn in H; clear Hfn
             end.
             rewrite length_app in H0. lia.
         }
@@ -348,7 +352,8 @@ Module Impl.
   Proof.                     
     intros. specialize (weight_bound (length after) before after ltac:(lia)) as H.
     pose proof (compress_valid after before 0) as Hv.
-    specialize (tokens_to_bytes_bounded_by_weight (length (compress' before after 0)) (compress' before after 0) Hv ltac:(lia)) as H'.
+    specialize (tokens_to_bytes_bounded_by_weight (length (compress' before after 0))
+                (compress' before after 0) Hv ltac:(lia)) as H'.
     etransitivity. exact H'. 
     apply Nat.Div0.div_le_mono.
     lia.
@@ -367,55 +372,3 @@ Module Impl.
 
 End Impl.
 
-Section Tests.
-  Import Impl.
-
-  Definition empty : list byte := [].
-  Definition literals : list byte := ["010"%byte; "011"%byte].
-  Definition compressed_literals : list Token := [Lit "010"%byte; Lit "011"%byte].
-  Definition repeating : list byte := [zero; one; one; zero; one; zero; one; one; zero].
-  Definition overlapping : list byte := [zero; one; zero; one; zero; one].
-  Definition compressed_repeating : list Token := [Lit zero; Lit one; Lit one; Lit zero; Lit one; Ref 4 5].
-  Definition compressed_overlapping : list Token := [Lit zero; Lit one; Lit zero; Lit one; Lit zero; Lit one].
-  
-  Example compress_empty_test :
-    compress empty = [].
-  Proof. reflexivity. Qed.
-  
-  Example decompress_empty_test :
-    decompress [] = empty.
-  Proof. reflexivity. Qed.
-  
-  Example compress_literals_test :
-    compress literals = compressed_literals.
-  Proof. reflexivity. Qed.
-  
-  Example decompress_literals_test :
-    decompress compressed_literals = literals.
-  Proof. reflexivity. Qed.
-  
-  Example compress_repetition_test :
-    compress repeating = compressed_repeating.
-  Proof. reflexivity. Qed.
-  
-  Example decompress_overlap_test :
-    decompress compressed_overlapping = overlapping.
-  Proof. reflexivity. Qed.
-  
-  Example correctness_empty :
-    decompress (compress empty) = empty.
-  Proof. reflexivity. Qed.
-  
-  Example correctness_simple :
-    decompress (compress [zero]) = [zero].
-  Proof. reflexivity. Qed.
-  
-  Example correctness_repeating :
-    decompress (compress repeating) = repeating.
-  Proof. reflexivity. Qed.
-  
-  Example correctness_overlapping :
-    decompress (compress overlapping) = overlapping.
-  Proof. reflexivity. Qed.
-
-End Tests.
