@@ -161,68 +161,53 @@ Module Matching.
 
   Lemma find_largest_match_corr3' (s t : list byte) (n l len off : nat) :
     find_largest_match' s t l = Some (len, off) ->
-    (l <= length t) ->
+    l <= length t ->
     list_eqb Byte.eqb (slice ((length s) - off) len s) (slice 0 len t) = true /\
     len <= length t.
   Proof.
-    generalize s t n len off. clear s t n len off. induction l.
-    intros. simpl in H. inversion H.
-
-    intros. simpl in H.
-    destruct l. inversion H.
-    destruct l. inversion H.
-
-    destruct (find_match eqb (slice (length s - 4098) 4098 s)
-    (slice 0 (S (S (S l))) t)) eqn:Hd.
-
-    inversion H. clear H.
-    remember (slice (length s - 4098) 4098 s) as suff.
-    remember (slice 0 (S (S (S l))) t) as pref.
-
-    specialize (find_match_corr Byte.eqb suff pref n0 Hd) as Hslice.
-    clear IHl.
-    specialize (slice_slice s (length s - 4098) 4098 n0 (length pref)) as Hdouble.
-    rewrite Heqsuff in Hslice. rewrite Hdouble in Hslice.
-    destruct Hslice as (Hslice1 & Hslice2).
-
-    assert (length pref >= 1). assert (length t >= 3). lia.
-    specialize (slice_size t 0 (S (S (S l)))) as Hpref_size. rewrite <- Heqpref in Hpref_size.
-    lia.
-
-    specialize (Hslice2 H). rewrite <- Heqsuff in Hslice2.
-    assert ((length s - (length suff - n0)) = (length s - 4098 + n0)).
-    specialize (slice_size s (length s - 4098) 4098) as Hsuff_size.
-    rewrite <- Heqsuff in Hsuff_size.
-    lia.
-
-    rewrite H1.
-    assert (length pref = (S (S (S l))) ).
-    specialize (slice_size t 0 (S (S (S l)))) as Hpref_size. rewrite <- Heqpref in Hpref_size.
-    lia.
-
-    rewrite H4 in Hslice1.
-    assert ((4098 - n0) >= length pref).
-    specialize (equality_implies_length_eq Byte.eqb  (slice (length s - 4098 + n0) (Nat.min (S (S (S l)))
-    (4098 - n0)) s) pref Hslice1) as Hlength_eq.
-    specialize (slice_size s (length s - 4098 + n0) (Nat.min (S (S (S l))) (4098 - n0))) as Hlen.
-    rewrite Hlen in Hlength_eq. clear Hlen.
-    lia.
-
-    rewrite H4 in H5.
-    assert (Nat.min (S (S (S l))) (4098 - n0) = (S (S (S l)))).
-    lia.
-
-    rewrite H6 in Hslice1.
-
-
-    split.
-    assumption.
-    assumption.
-
-    eapply IHl.
-    exact l.
-    exact H.
-    lia.
+    revert s t n len off.
+    induction l; simpl; intros.
+    - discriminate.
+    - do 2 (destruct l; try discriminate).
+      destruct (find_match eqb (slice (length s - 4098) 4098 s)
+                               (slice 0 (S (S (S l))) t)) eqn:Hd.
+      + inversion H; subst. clear H.
+        remember (slice (length s - 4098) 4098 s) as suff.
+        remember (slice 0 (S (S (S l))) t) as pref.
+        specialize (find_match_corr Byte.eqb suff pref n0 Hd) as Hslice.
+        specialize (slice_slice s (length s - 4098) 4098 n0 (length pref)) as Hdouble.
+        rewrite Heqsuff in Hslice. rewrite Hdouble in Hslice.
+        destruct Hslice as (Hslice1 & Hslice2).
+        assert (length t >= 3) by lia.
+        assert (length pref >= 1). {
+          specialize (slice_size t 0 (S (S (S l)))) as Hpref_size.
+          rewrite <- Heqpref in Hpref_size.
+          lia.
+        }
+        specialize (Hslice2 H1).
+        rewrite <- Heqsuff in Hslice2.
+        assert ((length s - (length suff - n0)) = (length s - 4098 + n0)). {
+          specialize (slice_size s (length s - 4098) 4098) as Hsuff_size.
+          rewrite <- Heqsuff in Hsuff_size.
+          lia.
+        }
+        rewrite H2.
+        assert (length pref = (S (S (S l)))).
+        specialize (slice_size t 0 (S (S (S l)))) as Hpref_size.
+        rewrite <- Heqpref in Hpref_size. lia.
+        rewrite H3 in Hslice1.
+        assert ((4098 - n0) >= length pref). {
+          specialize (equality_implies_length_eq Byte.eqb (slice (length s - 4098 + n0)
+                     (Nat.min (S (S (S l))) (4098 - n0)) s) pref Hslice1) as Hlength_eq.
+          specialize (slice_size s (length s - 4098 + n0) (Nat.min (S (S (S l))) (4098 - n0))) as Hlen.
+          rewrite Hlen in Hlength_eq.
+          lia.
+        }
+        rewrite H3 in H4.
+        assert (Nat.min (S (S (S l))) (4098 - n0) = (S (S (S l)))) by lia.
+        rewrite H5 in Hslice1.
+        split; assumption.
+      + apply IHl; assumption || lia.
   Qed.
 
   Lemma find_largest_match_corr3 (s t : list byte) (len off : nat) :

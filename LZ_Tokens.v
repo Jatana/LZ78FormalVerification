@@ -58,14 +58,14 @@ Module Tokens.
              ((n mod 128) + 128 * n', tail)
     end.
 
-  Lemma nat_to_bytes_correctness': forall n fuel,
+  Lemma nat_to_bytes_correctness': forall n fuel rest,
+    n <> 0 ->
     n <= fuel ->
-    bytes_to_nat (nat_to_bytes_fueled fuel n) = (n, []).
+    bytes_to_nat (nat_to_bytes_fueled fuel n ++ rest) = (n, rest).
   Proof.
     induction n as [n IHn] using lt_wf_rec; intros.
     destruct fuel.
-    - assert (n = 0) by lia. subst.
-      reflexivity.
+    - lia.
     - simpl.
       destruct (n <? 128) eqn:?; subst; simpl.
       + apply Nat.ltb_lt in Heqb as Hnl.
@@ -92,7 +92,12 @@ Module Tokens.
         rewrite Hf.
         replace (fst (Nat.divmod n 127 0 127)) with (n / 128) by reflexivity.
         assert (Hdiv : n / 128 < n) by (apply Nat.div_lt; lia).
-        rewrite (IHn (n / 128) Hdiv fuel ltac:(lia)).
+        assert (n / 128 <> 0). {
+          pose proof (Nat.divmod_spec n 127 0 127 ltac:(lia)).
+          simpl. destruct (Nat.divmod n 127 0 127).
+          simpl. lia.
+        }
+        rewrite (IHn (n / 128) Hdiv fuel rest H2 ltac:(lia)).
         f_equal.
         pose proof (Nat.divmod_spec (n mod 128 + 128) 127 0 127 ltac:(lia)).
         destruct (Nat.divmod (n mod 128 + 128) 127 0 127) as [q u].
@@ -111,7 +116,9 @@ Module Tokens.
     n <> 0 ->
     bytes_to_nat (nat_to_bytes n ++ rest) = (n, rest).
   Proof.
-  Admitted.
+    intros. unfold nat_to_bytes.
+    rewrite nat_to_bytes_correctness'; auto.
+  Qed.
 
   Lemma nat_to_bytes_length': forall n fuel,
     length (nat_to_bytes_fueled fuel n) <= Nat.log2 n / 7 + 1.
@@ -668,6 +675,127 @@ Module Tokens.
     intros.
     unfold bytes_to_tokens, tokens_to_bytes.
     eapply to_tokens_fueled_correctness; trivial.
+  Qed.
+
+  Definition token_weight t :=
+    match t with
+    | Lit _ => 1
+    | Ref _ _ => 3
+    end.
+
+  Lemma chunk_length_bound': forall n seq,
+    n <= 8 ->
+    (tokens_to_bytes_chunk_len n seq) <= ((list_sum (map token_weight seq))).
+  Proof.
+    induction n; intros; destruct seq; simpl; try lia.
+    specialize (IHn seq ltac:(lia)).
+    destruct t; simpl; lia.
+  Qed.
+
+  Lemma chunk_length_bound: forall tokens n acc flag_byte tail,
+    n <= 8 ->
+    Forall valid_token tokens ->
+    tokens_to_bytes_chunk n tokens = (flag_byte, tail, acc) ->
+    exists prev,
+      tokens = prev ++ tail /\
+      (tail = [] \/ length prev = n) /\
+      length acc <= (list_sum (map token_weight prev)).
+  Proof.
+    intros.
+    pose proof (chunk_remove n tokens acc flag_byte tail H H0 H1).
+    destruct H2 as [prev [He [Hv [Hl Ht]]]].
+    exists prev.
+    repeat split.
+    - assumption.
+    - destruct tail.
+      + left. reflexivity.
+      + right. rewrite He, length_app in Hl.
+        simpl in Hl. lia.
+    - pose proof (chunk_length_bound' n prev H).
+      now rewrite <- (tokens_to_bytes_chunk_len_correctness n prev flag_byte [] acc Ht).
+  Qed.
+
+  Lemma tokens_to_bytes_bounded_by_weight : forall fuel tokens,
+    Forall valid_token tokens ->
+    length tokens <= fuel ->
+    length (tokens_to_bytes_fueled tokens fuel) <= ((9 * (list_sum (map token_weight tokens))) + 7) / 8.
+  Proof.
+    induction fuel; intros.
+    - simpl. lia.
+    - destruct tokens.
+      + simpl. lia.
+      + unfold tokens_to_bytes_fueled.
+        destruct (tokens_to_bytes_chunk 8 (t :: tokens)) as [[flag tail] acc] eqn:?.
+        simpl length. rewrite length_app.
+        destruct (chunk_length_bound (t :: tokens) 8 acc flag tail ltac:(lia) H Heqp)
+                  as (prev & Ht & Hor & Hl).
+        simpl in H.
+        match goal with
+        | [ |- context[length (?fn ?t ?f)] ] =>
+            assert (He: fn t f = tokens_to_bytes_fueled tail fuel)
+                    by reflexivity; rewrite He; clear He
+        end.
+        assert (Hlf: length tail <= fuel). {
+          apply le_S_n in H0.
+          destruct prev.
+          - simpl in Hl. inversion Hl. apply length_zero_iff_nil in H2.
+            simpl in Ht. subst.
+            simpl in Heqp.
+            do 8 (destruct tokens; simpl in Heqp; try discriminate).
+            destruct t, t0, t1, t2, t3, t4, t5, t6, t7; discriminate.
+          - simpl in Ht.
+            assert (tokens = prev ++ tail) by congruence.
+            rewrite H1 in H0.
+            match goal with
+            | [ H: context[?fn (prev ++ tail)] |- _ ] =>
+                assert (Hfn: fn (prev ++ tail) = length (prev ++ tail))
+                        by reflexivity; rewrite Hfn in H; clear Hfn
+            end.
+            rewrite length_app in H0. lia.
+        }
+        rewrite Ht in H.
+        destruct (Forall_app valid_token prev tail) as [H1 _].
+        destruct (H1 H) as [_ H2].
+        specialize (IHfuel tail H2 Hlf).
+        rewrite Ht, map_app, list_sum_app.
+        eapply Nat.le_trans with (m :=
+               S (list_sum (map token_weight prev) + (9 * list_sum (map token_weight tail) + 7) / 8)).
+        * lia.
+        * assert (prev <> []). {
+            destruct prev.
+            - simpl in Hl. inversion Hl. apply length_zero_iff_nil in H4.
+              simpl in Ht. subst.
+              simpl in Heqp.
+              do 8 (destruct tokens; simpl in Heqp; try discriminate).
+              destruct t, t0, t1, t2, t3, t4, t5, t6, t7; discriminate.
+            - discriminate.
+          }
+          set (x := list_sum (map token_weight prev)).
+          set (y := list_sum (map token_weight tail)).
+          destruct Hor.
+          -- assert (1 <= x). {
+               destruct prev.
+               - contradiction.
+               - simpl in x. destruct t0; simpl in x; lia.
+             }
+             subst. simpl in y |- *.
+             match goal with
+             | [ |- context[Nat.divmod ?x ?y ?q ?u] ] =>
+                 pose proof (Nat.divmod_spec x y q u ltac:(lia));
+                 destruct (Nat.divmod x y q u) eqn:?
+             end.
+             simpl. lia.
+          -- assert (8 <= x). {
+               do 8 (destruct prev; try (simpl in H4; lia)).
+               destruct t0, t1, t2, t3, t4, t5, t6, t7; simpl in x; lia.
+             }
+             simpl.
+             do 2 match goal with
+             | [ |- context[Nat.divmod ?x ?y ?q ?u] ] =>
+                 pose proof (Nat.divmod_spec x y q u ltac:(lia));
+                 destruct (Nat.divmod x y q u) eqn:?
+             end.
+             simpl. lia.
   Qed.
 
 End Tokens.

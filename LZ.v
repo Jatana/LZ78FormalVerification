@@ -186,23 +186,16 @@ Module Impl.
     intros.
     unfold decompress_from_bytes, compress_to_bytes.
     destruct s.
-    - unfold bytes_to_tokens, decompress.
-      reflexivity.
+    - reflexivity.
     - rewrite nat_to_bytes_correctness, to_tokens_correctness.
       + apply correctness.
       + apply compress_valid.
       + simpl. lia.
   Qed.
 
-  Definition symb_weight t :=
-    match t with
-    | Lit _ => 1
-    | Ref _ _ => 3
-    end.
-
   Lemma weight_bound : forall n before after,
     length after <= n -> 
-    list_sum (map symb_weight (compress' before after 0)) <= length after.
+    list_sum (map token_weight (compress' before after 0)) <= length after.
   Proof.
     induction n; intros; destruct after; simpl; try lia.
     - inversion H.
@@ -229,121 +222,6 @@ Module Impl.
           lia.
       + eapply le_n_S, IHn.
         simpl in H. lia.
-  Qed.
-
-  Lemma chunk_length_bound': forall n seq,
-    n <= 8 ->
-    (tokens_to_bytes_chunk_len n seq) <= ((list_sum (map symb_weight seq))).
-  Proof.
-    induction n; intros; destruct seq; simpl; try lia.
-    specialize (IHn seq ltac:(lia)).
-    destruct t; simpl; lia.
-  Qed.
-
-  Lemma chunk_length_bound: forall tokens n acc flag_byte tail,
-    n <= 8 ->
-    Forall valid_token tokens ->
-    tokens_to_bytes_chunk n tokens = (flag_byte, tail, acc) ->
-    exists prev,
-      tokens = prev ++ tail /\
-      (tail = [] \/ length prev = n) /\
-      length acc <= (list_sum (map symb_weight prev)).
-  Proof.
-    intros.
-    pose proof (chunk_remove n tokens acc flag_byte tail H H0 H1).
-    destruct H2 as [prev [He [Hv [Hl Ht]]]].
-    exists prev.
-    repeat split.
-    - assumption.
-    - destruct tail.
-      + left. reflexivity.
-      + right. rewrite He, length_app in Hl.
-        simpl in Hl. lia.
-    - pose proof (chunk_length_bound' n prev H).
-      now rewrite <- (tokens_to_bytes_chunk_len_correctness n prev flag_byte [] acc Ht).
-  Qed.
-
-  Lemma tokens_to_bytes_bounded_by_weight : forall fuel tokens,
-    Forall valid_token tokens ->
-    length tokens <= fuel ->
-    length (tokens_to_bytes_fueled tokens fuel) <= ((9 * (list_sum (map symb_weight tokens))) + 7) / 8.
-  Proof.
-    induction fuel; intros.
-    - simpl. lia.
-    - destruct tokens.
-      + simpl. lia.
-      + unfold tokens_to_bytes_fueled.
-        destruct (tokens_to_bytes_chunk 8 (t :: tokens)) as [[flag tail] acc] eqn:?.
-        simpl length. rewrite length_app.
-        destruct (chunk_length_bound (t :: tokens) 8 acc flag tail ltac:(lia) H Heqp)
-                  as (prev & Ht & Hor & Hl).
-        simpl in H.
-        match goal with
-        | [ |- context[length (?fn ?t ?f)] ] =>
-            assert (He: fn t f = tokens_to_bytes_fueled tail fuel)
-                    by reflexivity; rewrite He; clear He
-        end.
-        assert (Hlf: length tail <= fuel). {
-          apply le_S_n in H0.
-          destruct prev.
-          - simpl in Hl. inversion Hl. apply length_zero_iff_nil in H2.
-            simpl in Ht. subst.
-            simpl in Heqp.
-            do 8 (destruct tokens; simpl in Heqp; try discriminate).
-            destruct t, t0, t1, t2, t3, t4, t5, t6, t7; discriminate.
-          - simpl in Ht.
-            assert (tokens = prev ++ tail) by congruence.
-            rewrite H1 in H0.
-            match goal with
-            | [ H: context[?fn (prev ++ tail)] |- _ ] =>
-                assert (Hfn: fn (prev ++ tail) = length (prev ++ tail))
-                        by reflexivity; rewrite Hfn in H; clear Hfn
-            end.
-            rewrite length_app in H0. lia.
-        }
-        rewrite Ht in H.
-        destruct (Forall_app valid_token prev tail) as [H1 _].
-        destruct (H1 H) as [_ H2].
-        specialize (IHfuel tail H2 Hlf).
-        rewrite Ht, map_app, list_sum_app.
-        eapply Nat.le_trans with (m :=
-               S (list_sum (map symb_weight prev) + (9 * list_sum (map symb_weight tail) + 7) / 8)).
-        * lia.
-        * assert (prev <> []). {
-            destruct prev.
-            - simpl in Hl. inversion Hl. apply length_zero_iff_nil in H4.
-              simpl in Ht. subst.
-              simpl in Heqp.
-              do 8 (destruct tokens; simpl in Heqp; try discriminate).
-              destruct t, t0, t1, t2, t3, t4, t5, t6, t7; discriminate.
-            - discriminate.
-          }
-          set (x := list_sum (map symb_weight prev)).
-          set (y := list_sum (map symb_weight tail)).
-          destruct Hor.
-          -- assert (1 <= x). {
-               destruct prev.
-               - contradiction.
-               - simpl in x. destruct t0; simpl in x; lia.
-             }
-             subst. simpl in y |- *.
-             match goal with
-             | [ |- context[Nat.divmod ?x ?y ?q ?u] ] =>
-                 pose proof (Nat.divmod_spec x y q u ltac:(lia));
-                 destruct (Nat.divmod x y q u) eqn:?
-             end.
-             simpl. lia.
-          -- assert (8 <= x). {
-               do 8 (destruct prev; try (simpl in H4; lia)).
-               destruct t0, t1, t2, t3, t4, t5, t6, t7; simpl in x; lia.
-             }
-             simpl.
-             do 2 match goal with
-             | [ |- context[Nat.divmod ?x ?y ?q ?u] ] =>
-                 pose proof (Nat.divmod_spec x y q u ltac:(lia));
-                 destruct (Nat.divmod x y q u) eqn:?
-             end.
-             simpl. lia.
   Qed.
 
   Lemma upperbound': forall before after,
