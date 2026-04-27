@@ -14,6 +14,18 @@ Module Util.
     | _, _ => nil
     end.
 
+  Definition slice_std {A : Type} (p l : nat) (s : list A) : list A :=
+    firstn l (skipn p s).
+
+  Lemma slice_slice_std {A : Type} : forall s: list A, forall p l,
+    slice p l s = slice_std p l s.
+  Proof.
+    unfold slice_std.
+    induction s; simpl; intros.
+    - now rewrite skipn_nil, firstn_nil.
+    - destruct p, l; simpl; try f_equal; try auto.
+  Qed.
+
   Fixpoint list_eqb {A : Type} (eqb : A -> A -> bool) (s t : list A) : bool :=
     match (s, t) with
     | (cons s1 s2, cons t1 t2) => (eqb s1 t1) && (list_eqb eqb s2 t2)
