@@ -29,7 +29,7 @@ uint64_t encode_length(uint64_t len, uint8_t *out) {
 }
 
 // bytes_to_nat
-// We need to assume that in_size <= 64 / 7 = 9.
+// We need to assume that in_len <= 64 / 7 = 9.
 uint64_t decode_length(const uint8_t *in, uint64_t in_len, uint64_t *out) {
     if (in_len == 0) {
         *out = 0;
