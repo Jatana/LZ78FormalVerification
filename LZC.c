@@ -13,17 +13,35 @@ void *surely_malloc(size_t n) {
 
 
 // nat_to_bytes
+// uint64_t encode_length(uint64_t len, uint8_t *out) {
+//     if (len == 0) return 0;
+//     uint64_t idx = 0;
+//     uint64_t t = len;
+//     int j = 0;
+//     while (j < 20) {
+//         if (t < 128) {
+//             out[idx++] = (uint8_t)t;
+//             t = 0;
+//             // break;
+//         } else {
+//             out[idx++] = (uint8_t)((t % 128) + 128);
+//             t /= 128;
+//         }
+//         j++;
+//     }
+//     return idx;
+// }
+
 uint64_t encode_length(uint64_t len, uint8_t *out) {
     if (len == 0) return 0;
     uint64_t idx = 0;
-    while (1) {
-        if (len < 128) {
-            out[idx++] = (uint8_t)len;
-            break;
-        } else {
-            out[idx++] = (uint8_t)((len % 128) + 128);
-            len /= 128;
-        }
+    uint64_t t = len;
+    while (t >= 128) {
+            out[idx++] = (uint8_t)((t % 128) + 128);
+            t /= 128;
+    }
+    if (t > 0) {
+        out[idx++] = (uint8_t)((t % 128) + 128);
     }
     return idx;
 }

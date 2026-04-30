@@ -26,19 +26,21 @@ Definition surely_malloc_spec :=
 Definition bytes_to_vals (bs : list byte) : list val :=
   map Vbyte (map Byte.repr (map Z.of_nat (map to_nat bs))).
 
+Print val.
+
 Definition encode_length_spec :=
   DECLARE _encode_length
-    WITH sh: share, len: Z, out_: val, out: list val, out_len: Z, gv: globals
+    WITH sh: share, len: Z, out_: val, out: list val, out_len: Z, initial: list val, gv: globals
     PRE [ tulong, tptr tuchar ]
       PROP (writable_share sh; 0 <= len <= Int64.max_unsigned; isptr out_;
-            Zlength (nat_to_bytes (Z.to_nat len)) <= out_len; 0 <= out_len)
+            Zlength (nat_to_bytes (Z.to_nat len)) <= out_len; 0 <= out_len; Zlength initial = 20)
       PARAMS (Vlong (Int64.repr len); out_) GLOBALS (gv)
-      SEP (mem_mgr gv)
+      SEP (mem_mgr gv; data_at sh (tarray tuchar 20) initial out_)
     POST [ tulong ] EX idx: Z,
       PROP (idx = Zlength (nat_to_bytes (Z.to_nat len)))
       RETURN (Vlong (Int64.repr idx))
       SEP (mem_mgr gv;
-           data_at sh (tarray tuchar idx) (bytes_to_vals (nat_to_bytes (Z.to_nat len))) out_).
+           data_at sh (tarray tuchar 20) ((bytes_to_vals (nat_to_bytes (Z.to_nat len))) ++ (sublist idx (20 - idx) initial)) out_).
 
 Definition decode_length_spec :=
   DECLARE _decode_length
@@ -144,6 +146,7 @@ Lemma body_surely_malloc:
   semax_body Vprog Gprog f_surely_malloc surely_malloc_spec.
 Proof.
   start_function.
+  hint.
   forward_call (* p = malloc(n); *)
      (t, gv).
   Intros p.
@@ -174,14 +177,102 @@ Proof.
         rewrite Int64.unsigned_repr_eq.
         rewrite Z.mod_small; [reflexivity | rep_lia].
       }
-      rewrite H3 in H4.
+      rewrite H4 in H8.
       auto.
     }
     Exists 0.
     entailer!!.
-    rewrite data_at_tuchar_zero_array_eq; auto.
+    hint.
+    autorewrite with sublist.
+    entailer!.
   - forward.
-    (* forward_loop ??? *)
+    hint.
+    forward.
+    Compute (3^4).
+    forward_while (EX (i t: Z),
+    PROP  (0 <= i < 20 /\ t = len / (128^i))
+    LOCAL (
+            temp _t (Vlong (Int64.repr t));
+            temp _idx (Vlong (Int64.repr i));
+            temp _len (Vlong (Int64.repr len));
+            temp _out out_)
+    SEP   (mem_mgr gv; data_at sh (tarray tuchar 20) ((sublist 0 i (bytes_to_vals (nat_to_bytes (Z.to_nat len)))) ++ (sublist i (20 - i) initial)) out_)).
+      + 
+        Exists 0.
+        Exists len.
+        (* Exists len. *)
+        (* Exists initial.  *)
+        entailer!.
+        Search (_ ^ 0).
+        rewrite Z.pow_0_r.
+        Search (_ / 1).
+        rewrite Z.div_1_r.
+        reflexivity.
+        hint.
+        autorewrite with sublist.
+        hint.
+        auto.
+      + hint.
+        entailer!.
+      + forward.
+        forward.
+        forward.
+        hint.
+        forward.
+        hint.
+        entailer!.
+        Exists ((i + 1), t / 128).
+        hint.
+        autorewrite with norm.
+        hint.
+        entailer!.
+          * split. 
+            -- split. lia.
+               admit.
+            -- split. destruct H5 as (H5a & H5b). rewrite H5b. admit.
+               admit.
+          * assert (sublist i 1 (bytes_to_vals (nat_to_bytes (Z.to_nat len))) = [Vint (Int.repr ((t mod 128) + 128))]) by admit.
+            assert ((sublist 0 (i + 1)
+(bytes_to_vals (nat_to_bytes (Z.to_nat len))) ++
+sublist (i + 1) (20 - (i + 1)) initial) = (sublist 0 i
+(bytes_to_vals (nat_to_bytes (Z.to_nat len))) ++ [Vint (Int.repr (t mod 128 + 128))]++
+ sublist (i + 1) (20 - (i + 1)) initial)) by admit.
+            rewrite H10. 
+            Search (upd_Znth).
+            rewrite upd_Znth_app2.
+            Search (upd_Znth).
+            Search (sublist).
+            assert (Zlength (sublist 0 i
+(bytes_to_vals (nat_to_bytes (Z.to_nat len)))) = i) by admit.
+            rewrite H11.
+            Search (upd_Znth).
+            Search (_ - _ = 0).
+            rewrite Z.sub_diag.
+            assert ((sublist i (20 - i) initial) = (Znth i initial) :: (sublist (i + 1) (20 - i - 1) initial)) by admit.
+            rewrite H12.
+            rewrite upd_Znth0.
+            (* assert ((sublist 0 i (bytes_to_vals (nat_to_bytes (Z.to_nat len))) ++
+(Vint ( (t mod 128 + 128))) :: sublist (i + 1) (20 - i - 1) initial) = (sublist 0 i (bytes_to_vals (nat_to_bytes (Z.to_nat len))) ++
+[Vint (Int.repr (t mod 128 + 128))] ++
+sublist (i + 1) (20 - (i + 1)) initial)) by admit. *)
+            (* rewrite H13. *)
+            admit.
+            admit.
+      + forward_if (EX (i t: Z),
+    PROP  ()
+    LOCAL (
+            temp _t (Vlong (Int64.repr t));
+            temp _idx (Vlong (Int64.repr i));
+            temp _len (Vlong (Int64.repr len));
+            temp _out out_)
+    SEP   (mem_mgr gv; data_at sh (tarray tuchar 20) ((sublist 0 (i) (bytes_to_vals (nat_to_bytes (Z.to_nat len)))) ++ (sublist (i) (20 - i) initial)) out_)).
+        * hint. forward. forward. hint. forward. admit.
+        * hint. forward. hint. entailer!. Exists i. Exists t. hint. autorewrite with sublist in *|-. hint.
+        entailer!.
+        * hint. Intros idx. Intros t0. hint. forward. hint.
+          try autorewrite with sublist in *|-.
+          Exists idx. entailer!. admit.
+          hint. autorewrite with sublist in *|-. auto. admit.
 Admitted.
 
 Lemma decode_length_body:
