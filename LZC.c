@@ -32,6 +32,13 @@ void *surely_malloc(size_t n) {
 //     return idx;
 // }
 
+uint8_t get_nth(uint64_t x, uint64_t n) {
+    for (int i = 0; i < n; i++) {
+        x /= 128;
+    }
+    return x % 128 + 128;
+}
+
 uint64_t encode_length(uint64_t len, uint8_t *out) {
     if (len == 0) return 0;
     uint64_t idx = 0;

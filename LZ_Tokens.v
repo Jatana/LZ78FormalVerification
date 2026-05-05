@@ -36,6 +36,12 @@ Module Tokens.
       lia.
   Qed.
 
+  Fixpoint get_nth (x n : nat) : nat :=
+    match n with
+      | 0 => (x mod 128) + 128
+      | S m => get_nth (x / 128) m
+      end.
+
   Fixpoint nat_to_bytes_fueled (fuel n: nat): list byte :=
     match fuel with
     | 0 => []

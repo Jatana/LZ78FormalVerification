@@ -85,6 +85,7 @@ Definition _exit : ident := $"exit".
 Definition _find_largest_match : ident := $"find_largest_match".
 Definition _flag : ident := $"flag".
 Definition _flag_i : ident := $"flag_i".
+Definition _get_nth : ident := $"get_nth".
 Definition _i : ident := $"i".
 Definition _idx : ident := $"idx".
 Definition _in : ident := $"in".
@@ -110,6 +111,7 @@ Definition _start : ident := $"start".
 Definition _surely_malloc : ident := $"surely_malloc".
 Definition _t : ident := $"t".
 Definition _token_count : ident := $"token_count".
+Definition _x : ident := $"x".
 Definition _t'1 : ident := 128%positive.
 Definition _t'10 : ident := 137%positive.
 Definition _t'11 : ident := 138%positive.
@@ -145,6 +147,33 @@ Definition f_surely_malloc := {|
         ((Econst_int (Int.repr 1) tint) :: nil))
       Sskip)
     (Sreturn (Some (Etempvar _p (tptr tvoid))))))
+|}.
+
+Definition f_get_nth := {|
+  fn_return := tuchar;
+  fn_callconv := cc_default;
+  fn_params := ((_x, tulong) :: (_n, tulong) :: nil);
+  fn_vars := nil;
+  fn_temps := ((_i, tint) :: nil);
+  fn_body :=
+(Ssequence
+  (Ssequence
+    (Sset _i (Econst_int (Int.repr 0) tint))
+    (Sloop
+      (Ssequence
+        (Sifthenelse (Ebinop Olt (Etempvar _i tint) (Etempvar _n tulong)
+                       tint)
+          Sskip
+          Sbreak)
+        (Sset _x
+          (Ebinop Odiv (Etempvar _x tulong) (Econst_int (Int.repr 128) tint)
+            tulong)))
+      (Sset _i
+        (Ebinop Oadd (Etempvar _i tint) (Econst_int (Int.repr 1) tint) tint))))
+  (Sreturn (Some (Ebinop Oadd
+                   (Ebinop Omod (Etempvar _x tulong)
+                     (Econst_int (Int.repr 128) tint) tulong)
+                   (Econst_int (Int.repr 128) tint) tulong))))
 |}.
 
 Definition f_encode_length := {|
@@ -1128,6 +1157,7 @@ Definition global_definitions : list (ident * globdef fundef type) :=
                    (mksignature (AST.Xint :: nil) AST.Xvoid cc_default))
      (tint :: nil) tvoid cc_default)) ::
  (_surely_malloc, Gfun(Internal f_surely_malloc)) ::
+ (_get_nth, Gfun(Internal f_get_nth)) ::
  (_encode_length, Gfun(Internal f_encode_length)) ::
  (_decode_length, Gfun(Internal f_decode_length)) ::
  (_find_largest_match, Gfun(Internal f_find_largest_match)) ::
@@ -1137,8 +1167,8 @@ Definition global_definitions : list (ident * globdef fundef type) :=
 
 Definition public_idents : list ident :=
 (_main :: _decompress :: _compress :: _find_largest_match ::
- _decode_length :: _encode_length :: _surely_malloc :: _exit :: _malloc ::
- ___builtin_debug :: ___builtin_fmin :: ___builtin_fmax ::
+ _decode_length :: _encode_length :: _get_nth :: _surely_malloc :: _exit ::
+ _malloc :: ___builtin_debug :: ___builtin_fmin :: ___builtin_fmax ::
  ___builtin_fnmsub :: ___builtin_fnmadd :: ___builtin_fmsub ::
  ___builtin_fmadd :: ___builtin_clsll :: ___builtin_clsl :: ___builtin_cls ::
  ___builtin_expect :: ___builtin_unreachable :: ___builtin_va_end ::

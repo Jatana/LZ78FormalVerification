@@ -26,6 +26,20 @@ Definition surely_malloc_spec :=
 Definition bytes_to_vals (bs : list byte) : list val :=
   map Vbyte (map Byte.repr (map Z.of_nat (map to_nat bs))).
 
+  Print Z.
+
+Definition get_nth_spec :=
+  DECLARE _encode_length
+    WITH sh: share, x : Z, n : Z, gv: globals
+    PRE [ tulong, tulong ]
+      PROP (writable_share sh; 0 <= x <= Int64.max_unsigned - 128; 0 <= n <= 20)
+      PARAMS (Vlong (Int64.repr x); Vlong (Int64.repr n)) GLOBALS (gv)
+      SEP (mem_mgr gv)
+    POST [ tuchar ] EX val: Z,
+      PROP (val = Z.of_nat (get_nth (Z.to_nat x) (Z.to_nat n)))
+      RETURN (Vint (Int.repr val))
+      SEP (mem_mgr gv).
+
 Definition encode_length_spec :=
   DECLARE _encode_length
     WITH sh: share, len: Z, out_: val, out: list val, out_len: Z, initial: list val, gv: globals
@@ -163,6 +177,202 @@ Proof.
    - forward. Exists p. entailer!.
 Qed.
 
+Lemma easy_ineq1 (x i : Z) :
+  0 <= x <= Int64.max_unsigned -> 0 <= i -> x / 128 ^ i <= Int64.max_unsigned.
+Proof.
+  intros.
+  assert (1 <= 128 ^ i).
+  replace 1 with (128 ^ 0) by reflexivity.
+  apply Z.pow_le_mono_r; lia.
+  assert (H_div_le_x : x / 128 ^ i <= x). {
+    apply Z.div_le_upper_bound.
+    * apply Z.pow_pos_nonneg; lia.
+    * replace x with (x * 1) at 1 by lia.
+      Search (_ * _ <= _ * _).
+      Search (_ * _ = _ * _).
+      rewrite (Z.mul_comm (128^i) x).
+      apply Z.mul_le_mono_nonneg_l. lia. lia.
+  }
+  etransitivity.
+  exact H_div_le_x.
+  lia.
+Qed.
+
+Lemma easy_eq2 :
+  128^0 = 1.
+Proof.
+  Search (_ ^ _).
+  apply Z.pow_0_r.
+Qed.
+
+Arguments Nat.modulo : simpl never.
+Arguments Nat.divmod : simpl never.
+Arguments Nat.div : simpl never.
+
+Lemma get_nth_Z : forall (x n : Z),
+  0 <= x -> 
+  0 <= n ->
+  Z.of_nat (get_nth (Z.to_nat x) (Z.to_nat n)) = (x / 128 ^ n) mod 128 + 128.
+Proof.
+  intros x n Hx Hn.
+  rewrite <- (Z2Nat.id n) by lia.
+  generalize (Z.to_nat n); intro n_nat. clear n Hn. generalize Hx. clear Hx. generalize x. 
+  induction n_nat.
+    - intros. change (Z.of_nat 0) with 0. rewrite easy_eq2. Search (_ / _). rewrite Zdiv_1_r.
+      change (Z.to_nat 0) with 0%nat.
+      simpl get_nth.
+      Search (Z.of_nat _).
+
+
+      rewrite Nat2Z.inj_add.
+      
+      change (Z.of_nat 128) with 128.
+
+      Search (Z.of_nat _).
+
+      rewrite Nat2Z.inj_mod.
+      change (Z.of_nat 128) with 128.
+      rewrite Z2Nat.id by lia.
+      reflexivity.
+    - intros. 
+      rewrite Nat2Z.id.
+      simpl get_nth.
+      rewrite Nat2Z.id in IHn_nat.
+      assert ((Nat.div (Z.to_nat x0) 128) = Z.to_nat (Z.of_nat ((Z.to_nat x0) / 128))).
+      {
+       rewrite Nat2Z.id. reflexivity. 
+      }
+      rewrite H. rewrite IHn_nat.
+        -- Search (_ + _ = _ + _). eapply Zplus_eq_compat. 2 : { reflexivity. }
+           f_equal.
+          rewrite Nat2Z.inj_div.
+          
+          change (Z.of_nat 128) with 128.
+          
+          rewrite Z2Nat.id by lia.
+
+          replace (Z.of_nat (S n_nat)) with (Z.of_nat n_nat + 1) by lia.
+          rewrite Z.pow_add_r by lia.
+          change (128 ^ 1) with 128.
+
+          rewrite (Z.mul_comm (128 ^ Z.of_nat n_nat) 128).
+
+          rewrite <- Z.div_div.
+          * reflexivity.
+          *
+            lia.
+          *
+            apply Z.pow_pos_nonneg; lia.
+        -- Search (0 <= Z.of_nat _). apply Zle_0_nat.
+Qed.
+
+Lemma get_nth_body:
+  semax_body Vprog Gprog f_get_nth get_nth_spec.
+Proof.
+  start_function.
+  hint.
+  forward_for_simple_bound n (EX i:Z,
+    PROP()
+    LOCAL(gvars gv; temp _x (Vlong (Int64.repr (x / 128^i))); temp _n (Vlong (Int64.repr n)))
+    SEP(mem_mgr gv)).
+    - entailer!.
+      f_equal.
+      f_equal.
+      Search (_ ^ 0). 
+      rewrite Z.pow_0_r.
+      Search (_ / _).
+      rewrite Z.div_1_r.
+      auto.
+    - forward.
+      entailer!.
+      apply f_equal.
+      rewrite Z.pow_add_r by lia.
+      change (128 ^ 1) with 128.
+
+      rewrite <- Z.div_div.
+      2: { lia. }
+      2: { lia. }
+
+      unfold Int64.divu.
+
+      apply f_equal.
+      rewrite Int64.unsigned_repr.
+      reflexivity.
+
+      split. apply Z.div_pos; lia.
+      eapply easy_ineq1; lia.
+
+    - hint.
+      forward.
+      entailer!.
+      Exists (Z.of_nat (get_nth (Z.to_nat x) (Z.to_nat n))).
+      hint.
+      entailer!.
+
+      remember (Int64.unsigned (Int64.repr (x / 128 ^ n)) mod 128) as my_mod.
+
+      rewrite !Int64.Z_mod_modulus_eq.
+      
+      assert (H_my_mod_bounds : 0 <= my_mod < 128). {
+        subst my_mod.
+        apply Z.mod_pos_bound.
+        lia.
+      }
+
+      rewrite !Z.mod_small.
+      2: { 
+        change Int64.modulus with 18446744073709551616.
+        lia.
+      }
+      2: {
+        change Int64.modulus with 18446744073709551616.
+        rewrite !Z.mod_small. lia. lia.
+      }
+
+      subst my_mod.
+
+      rewrite Int64.unsigned_repr.
+      2: { 
+        split.
+        - apply Z.div_pos; lia.
+        - apply easy_ineq1. lia. lia.
+      }
+      f_equal.
+      rewrite get_nth_Z.
+      2 : { lia. }
+      2 : { lia. }
+  remember ((x / 128 ^ n) mod 128 + 128) as Y.
+
+  assert (H_Y_bounds : 0 <= Y < 256). {
+    subst Y.
+    pose proof (Z.mod_pos_bound (x / 128 ^ n) 128).
+    lia.
+  }
+
+  rewrite <- (Int.repr_unsigned (Int.zero_ext 8 (Int.repr Y))).
+  rewrite <- (Int.repr_unsigned (Int.repr Y)).
+  f_equal.
+
+  Search (Int.zero_ext).
+  rewrite Int.zero_ext_mod.
+  2: {
+    split. lia. unfold Int.zwordsize. unfold Int.wordsize. unfold Wordsize_32.wordsize. simpl. lia.
+  }
+
+
+  rewrite !Int.unsigned_repr.
+  2: { 
+    change Int.max_unsigned with 4294967295.
+    lia. 
+  }
+  2: { 
+    change Int.max_unsigned with 4294967295.
+    apply Int.unsigned_range_2.
+  }
+
+  change (two_p 8) with 256. rewrite Z.mod_small. reflexivity.
+  assumption.
+Qed.
 
 Lemma encode_length_body:
   semax_body Vprog Gprog f_encode_length encode_length_spec.
