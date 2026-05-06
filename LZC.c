@@ -39,18 +39,10 @@ uint8_t get_nth(uint64_t x, uint64_t n) {
     return x % 128 + 128;
 }
 
-uint64_t encode_length(uint64_t len, uint8_t *out) {
-    if (len == 0) return 0;
-    uint64_t idx = 0;
-    uint64_t t = len;
-    while (t >= 128) {
-            out[idx++] = (uint8_t)((t % 128) + 128);
-            t /= 128;
+void encode_length(uint64_t len, uint8_t *out) {
+    for (int i = 0; i < 20; i++) {
+        out[i] = get_nth(len, i);
     }
-    if (t > 0) {
-        out[idx++] = (uint8_t)((t % 128) + 128);
-    }
-    return idx;
 }
 
 // bytes_to_nat
@@ -105,91 +97,91 @@ void find_largest_match(const uint8_t *in,
 }
 
 // compress_to_bytes
-uint8_t *compress(const uint8_t *in, uint64_t in_len) {
-    // TODO: Replace 65 with the correct value. 
-    uint64_t out_len = (9 * in_len + 7) / 8 + 65;
-    uint8_t *out = (uint8_t *)surely_malloc(out_len);
-    uint64_t out_i = encode_length(in_len, out);
-    uint64_t in_i = 0;
+// uint8_t *compress(const uint8_t *in, uint64_t in_len) {
+//     // TODO: Replace 65 with the correct value. 
+//     uint64_t out_len = (9 * in_len + 7) / 8 + 65;
+//     uint8_t *out = (uint8_t *)surely_malloc(out_len);
+//     uint64_t out_i = encode_length(in_len, out);
+//     uint64_t in_i = 0;
 
-    uint8_t flag = 0;
-    uint8_t token_count = 0;
-    uint64_t flag_i = out_i;
-    if (0 < in_len) out_i++;
+//     uint8_t flag = 0;
+//     uint8_t token_count = 0;
+//     uint64_t flag_i = out_i;
+//     if (0 < in_len) out_i++;
 
-    while (in_i < in_len) {
-        uint64_t len = 0;
-        uint64_t off = 0;
-        find_largest_match(in, in_len, in_i, &len, &off);
-        if (3 <= len) {
-            flag = flag << 1;
-            uint64_t len_opt = len - 3;
-            uint64_t off_opt = off - 3;
-            out[out_i++] = (len_opt << 4) | ((uint8_t)(off_opt >> 8));
-            out[out_i++] = (uint8_t)off_opt;
-            in_i += len;
-        } else {
-            flag = (flag << 1) | 1;
-            out[out_i++] = in[in_i++];
-        }
+//     while (in_i < in_len) {
+//         uint64_t len = 0;
+//         uint64_t off = 0;
+//         find_largest_match(in, in_len, in_i, &len, &off);
+//         if (3 <= len) {
+//             flag = flag << 1;
+//             uint64_t len_opt = len - 3;
+//             uint64_t off_opt = off - 3;
+//             out[out_i++] = (len_opt << 4) | ((uint8_t)(off_opt >> 8));
+//             out[out_i++] = (uint8_t)off_opt;
+//             in_i += len;
+//         } else {
+//             flag = (flag << 1) | 1;
+//             out[out_i++] = in[in_i++];
+//         }
 
-        token_count++;
-        if (token_count == 8) {
-            out[flag_i] = flag;
-            flag = 0;
-            token_count = 0;
-            flag_i = out_i++;
-        }
-    }
+//         token_count++;
+//         if (token_count == 8) {
+//             out[flag_i] = flag;
+//             flag = 0;
+//             token_count = 0;
+//             flag_i = out_i++;
+//         }
+//     }
 
-    if (0 < token_count) {
-        flag = flag << (8 - token_count);
-        out[flag_i] = flag;
-    }
+//     if (0 < token_count) {
+//         flag = flag << (8 - token_count);
+//         out[flag_i] = flag;
+//     }
 
-    return out;
-}
+//     return out;
+// }
 
-// decompress_from_bytes
-uint8_t *decompress(const uint8_t *in, uint64_t in_len) {
-    uint64_t out_len = 0;
-    uint64_t in_i = decode_length(in, in_len, &out_len);
-    uint64_t out_i = 0;
-    uint8_t *out = (uint8_t *)surely_malloc(out_len);
+// // decompress_from_bytes
+// uint8_t *decompress(const uint8_t *in, uint64_t in_len) {
+//     uint64_t out_len = 0;
+//     uint64_t in_i = decode_length(in, in_len, &out_len);
+//     uint64_t out_i = 0;
+//     uint8_t *out = (uint8_t *)surely_malloc(out_len);
 
-    uint8_t flag = 0;
-    uint8_t token_count = 0;
-    uint64_t flag_i = out_i;
+//     uint8_t flag = 0;
+//     uint8_t token_count = 0;
+//     uint64_t flag_i = out_i;
 
-    while (out_i < out_len && in_i < in_len) {
-        if (token_count == 0) {
-            flag = in[in_i++];
-            token_count = 8;
-        }
+//     while (out_i < out_len && in_i < in_len) {
+//         if (token_count == 0) {
+//             flag = in[in_i++];
+//             token_count = 8;
+//         }
 
-        if (flag >> 7) {
-            out[out_i++] = in[in_i++];
-        } else {
-            uint8_t b0 = in[in_i++];
-            uint8_t b1 = in[in_i++];
-            uint8_t len_opt = b0 >> 4;
-            uint8_t off_hi = b0 & 0x0F;
-            uint8_t off_lo = b1;
-            uint64_t len = len_opt + 3;
-            uint64_t off = (off_hi << 8) + off_lo + 3;
+//         if (flag >> 7) {
+//             out[out_i++] = in[in_i++];
+//         } else {
+//             uint8_t b0 = in[in_i++];
+//             uint8_t b1 = in[in_i++];
+//             uint8_t len_opt = b0 >> 4;
+//             uint8_t off_hi = b0 & 0x0F;
+//             uint8_t off_lo = b1;
+//             uint64_t len = len_opt + 3;
+//             uint64_t off = (off_hi << 8) + off_lo + 3;
 
-            for (uint64_t k = 0; k < len; k++) {
-                out[out_i] = out[out_i - off];
-                out_i++;
-            }
-        }
+//             for (uint64_t k = 0; k < len; k++) {
+//                 out[out_i] = out[out_i - off];
+//                 out_i++;
+//             }
+//         }
 
-        flag <<= 1;
-        token_count--;
-    }
+//         flag <<= 1;
+//         token_count--;
+//     }
 
-    return out;
-}
+//     return out;
+// }
 
 int main(void) {
 }

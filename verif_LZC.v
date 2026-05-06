@@ -23,13 +23,13 @@ Definition surely_malloc_spec :=
       SEP (mem_mgr gv; malloc_token Ews t p * data_at_ Ews t p).
 
 
-Definition bytes_to_vals (bs : list byte) : list val :=
-  map Vbyte (map Byte.repr (map Z.of_nat (map to_nat bs))).
+Definition bytes_to_vals (bs : list nat) : list val :=
+  map Vint (map Int.repr (map Z.of_nat (bs))).
 
   Print Z.
 
 Definition get_nth_spec :=
-  DECLARE _encode_length
+  DECLARE _get_nth
     WITH sh: share, x : Z, n : Z, gv: globals
     PRE [ tulong, tulong ]
       PROP (writable_share sh; 0 <= x <= Int64.max_unsigned - 128; 0 <= n <= 20)
@@ -44,17 +44,17 @@ Definition encode_length_spec :=
   DECLARE _encode_length
     WITH sh: share, len: Z, out_: val, out: list val, out_len: Z, initial: list val, gv: globals
     PRE [ tulong, tptr tuchar ]
-      PROP (writable_share sh; 0 <= len <= Int64.max_unsigned; isptr out_;
+      PROP (writable_share sh; 0 <= len <= Int64.max_unsigned - 128; isptr out_;
             Zlength (nat_to_bytes (Z.to_nat len)) <= out_len; 0 <= out_len; Zlength initial = 20)
       PARAMS (Vlong (Int64.repr len); out_) GLOBALS (gv)
       SEP (mem_mgr gv; data_at sh (tarray tuchar 20) initial out_)
-    POST [ tulong ] EX idx: Z,
-      PROP (idx = Zlength (nat_to_bytes (Z.to_nat len)))
-      RETURN (Vlong (Int64.repr idx))
+    POST [ tvoid ] 
+      PROP ()
+      RETURN ()
       SEP (mem_mgr gv;
-           data_at sh (tarray tuchar 20) ((bytes_to_vals (nat_to_bytes (Z.to_nat len))) ++ (sublist idx 20 initial)) out_).
+           data_at sh (tarray tuchar 20) ((bytes_to_vals (nat_to_bytes_fixed 0 20 (Z.to_nat len)))) out_).
 
-Definition decode_length_spec :=
+(* Definition decode_length_spec :=
   DECLARE _decode_length
     WITH sh_in: share, in_: val, in_bytes: list byte, in_len: Z,
          sh_out: share, out_: val, gv: globals
@@ -70,10 +70,10 @@ Definition decode_length_spec :=
       PROP (idx = Zlength (nat_to_bytes (fst (bytes_to_nat in_bytes))); 0 <= idx <= in_len)
       RETURN (Vlong (Int64.repr idx))
       SEP (mem_mgr gv;
-           data_at sh_out tulong (Vlong (Int64.repr (Z.of_nat (fst (bytes_to_nat in_bytes))))) out_).
+           data_at sh_out tulong (Vlong (Int64.repr (Z.of_nat (fst (bytes_to_nat in_bytes))))) out_). *)
 
 
-Definition find_largest_match_spec :=
+(* Definition find_largest_match_spec :=
   DECLARE _find_largest_match
     WITH sh: share, in_: val, in_bytes: list byte, in_len: Z,
          p: Z, len_: val, off_: val, gv: globals
@@ -100,13 +100,13 @@ Definition find_largest_match_spec :=
                (match result with
                 | Some (_, off) => off
                 | None => 0
-                end)))) off_).
+                end)))) off_). *)
 
 
 Definition compress_out_size (in_len : Z) : Z :=
   (9 * in_len + 7) / 8 + 65.
 
-Definition compress_spec :=
+(* Definition compress_spec :=
   DECLARE _compress
     WITH sh: share, in_: val, in_bytes: list byte, in_len: Z, gv: globals
     PRE [ tptr tuchar, tulong ]
@@ -121,9 +121,9 @@ Definition compress_spec :=
       RETURN (p)
       SEP (mem_mgr gv;
            malloc_token Ews (tarray tuchar (compress_out_size in_len)) p *
-           data_at Ews (tarray tuchar (Zlength out_bytes)) (bytes_to_vals out_bytes) p).
+           data_at Ews (tarray tuchar (Zlength out_bytes)) (bytes_to_vals out_bytes) p). *)
 
-Definition decompress_spec :=
+(* Definition decompress_spec :=
   DECLARE _decompress
     WITH sh: share, in_: val, in_bytes: list byte, in_len: Z, gv: globals
     PRE [ tptr tuchar, tulong ]
@@ -141,16 +141,16 @@ Definition decompress_spec :=
       SEP (mem_mgr gv;
            data_at sh (tarray tuchar in_len) (bytes_to_vals in_bytes) in_;
            malloc_token Ews (tarray tuchar (Zlength out_bytes)) p *
-           data_at Ews (tarray tuchar (Zlength out_bytes)) (bytes_to_vals out_bytes) p).
+           data_at Ews (tarray tuchar (Zlength out_bytes)) (bytes_to_vals out_bytes) p). *)
 
 
 Definition Gprog: funspecs :=
         ltac:(with_library prog [surely_malloc_spec;
-                                 encode_length_spec;
-                                 decode_length_spec;
-                                 find_largest_match_spec;
-                                 compress_spec;
-                                 decompress_spec]).
+                                 get_nth_spec;
+                                 encode_length_spec
+                                 (* decode_length_spec; *)
+                                 (* find_largest_match_spec *)
+                                 ]).
 
 
 (* Adapted from: https://github.com/PrincetonUniversity/VST/blob/master/progs/verif_queue.v *)
@@ -378,107 +378,94 @@ Lemma encode_length_body:
   semax_body Vprog Gprog f_encode_length encode_length_spec.
 Proof.
   start_function.
-  forward_if.
-  - forward.
-    assert (len = 0). {
-      assert (Int64.unsigned (Int64.repr len) = len). {
-        rewrite Int64.unsigned_repr_eq.
-        rewrite Z.mod_small; [reflexivity | rep_lia].
-      }
-      rewrite H4 in H8.
-      auto.
+  forward_for_simple_bound 20 (EX i:Z,
+    PROP()
+    LOCAL(gvars gv; temp _len (Vlong (Int64.repr (len))); temp _out out_)
+    SEP(mem_mgr gv; data_at sh (tarray tuchar 20) ((bytes_to_vals (nat_to_bytes_fixed 0 (Z.to_nat i) (Z.to_nat len))) ++ (sublist i 20 initial)) out_)).
+    - entailer!. hint. autorewrite with sublist. auto.
+    - hint. 
+      Opaque Z.div Z.modulo Z.pow. 
+      Opaque Z.to_nat Z.of_nat.
+      hint.
+      forward_call (sh, len, i, gv).
+        -- hint. entailer!. hint. autorewrite with sublist in *|-.
+           simpl. f_equal. Search (Int.signed (Int.repr _)).
+           rewrite Int.signed_repr.
+            * reflexivity.
+            * unfold Int.min_signed. unfold Int.max_signed.
+              unfold Int.half_modulus. unfold Int.modulus.
+              unfold Int.wordsize. unfold Wordsize_32.wordsize.
+              Search (two_power_nat _). 
+              change (two_power_nat 32) with 4294967296.
+              change (4294967296 / 2) with (2147483648).
+              lia.
+        -- hint. Intros ret_val. hint. assert (Int.min_signed <= i <= Int.max_signed).
+           unfold Int.min_signed. unfold Int.max_signed.
+              unfold Int.half_modulus. unfold Int.modulus.
+              unfold Int.wordsize. unfold Wordsize_32.wordsize.
+              Search (two_power_nat _). 
+              change (two_power_nat 32) with 4294967296.
+              change (4294967296 / 2) with (2147483648).
+              lia.
+            forward. entailer!. hint. 
+  replace (upd_Znth i (bytes_to_vals (nat_to_bytes_fixed 0 (Z.to_nat i) (Z.to_nat len)) ++ sublist i 20 initial) _)
+     with (bytes_to_vals (nat_to_bytes_fixed 0 (Z.to_nat (i + 1)) (Z.to_nat len)) ++ sublist (i + 1) 20 initial).
+  2: {
+    replace (Z.to_nat (i + 1)) with (S (Z.to_nat i)) by lia.
+    
+    rewrite nat_to_bytes_fixed_sn. Print bytes_to_vals. unfold bytes_to_vals.
+    
+
+    rewrite map_app. 
+    simpl.
+    
+    rewrite upd_Znth_app2.
+    2: { 
+
+      rewrite Zlength_map. 
+
+      rewrite Zlength_map. rewrite Zlength_map.
+      rewrite Zlength_correct. rewrite nat_to_bytes_fixed_len.
+      split.
+        - Search (Z.of_nat (Z.to_nat _)). rewrite Z2Nat.id. lia.
+          lia.
+        - rewrite Z2Nat.id. Search (Zlength _). specialize (Zlength_nonneg (sublist i 20 initial)) as Hnon.
+          lia. lia. 
     }
-    Exists 0.
-    entailer!!.
-    autorewrite with sublist.
-    entailer!.
-  - forward.
-    forward.
-    forward_while (EX (i t: Z),
-    PROP  (0 <= i < 20 /\ t = len / (128^i))
-    LOCAL (
-            temp _t (Vlong (Int64.repr t));
-            temp _idx (Vlong (Int64.repr i));
-            temp _len (Vlong (Int64.repr len));
-            temp _out out_)
-    SEP   (mem_mgr gv; data_at sh (tarray tuchar 20) ((sublist 0 i (bytes_to_vals (nat_to_bytes (Z.to_nat len)))) ++ (sublist i 20 initial)) out_)).
-      + 
-        Exists 0 len.
-        entailer!.
-        rewrite Z.pow_0_r, Z.div_1_r.
-        reflexivity.
-        autorewrite with sublist.
-        auto.
-      + entailer!.
-      + repeat forward.
-        entailer!.
-        Exists ((i + 1), t / 128).
-        entailer!.
-          * split. 
-            -- split. lia.
-               admit.
-            -- split. destruct H5 as (H5a & H5b). rewrite H5b.
-               rewrite Z.pow_add_r, Z.pow_1_r, Zdiv.Zdiv_Zdiv.
-               reflexivity. rep_lia. rep_lia. rep_lia. rep_lia.
-               rewrite divu_repr64. reflexivity.
-               admit. rep_lia.
-               * assert (sublist i (i + 1) (bytes_to_vals (nat_to_bytes (Z.to_nat len))) = [Vint (Int.repr ((t mod 128) + 128))]). {
-              admit.
-            }
-            assert ((sublist 0 (i + 1)
-(bytes_to_vals (nat_to_bytes (Z.to_nat len))) ++
-sublist (i + 1) 20 initial) = (sublist 0 i
-(bytes_to_vals (nat_to_bytes (Z.to_nat len))) ++ [Vint (Int.repr (t mod 128 + 128))]++
- sublist (i + 1) 20 initial)). {
-              rewrite <- H9.
-              autorewrite with sublist.
-              rewrite (sublist_split 0 i (i + 1) (bytes_to_vals (nat_to_bytes (Z.to_nat len)))).
-              rewrite app_assoc.
-              reflexivity.
-              rep_lia.
-              split. lia.
-              admit.
-            }
-            rewrite H10. 
-            rewrite upd_Znth_app2.
-            assert (Zlength (sublist 0 i (bytes_to_vals (nat_to_bytes (Z.to_nat len)))) = i) by admit.
-            rewrite H11, Z.sub_diag.
-            assert ((sublist i 20 initial) = (Znth i initial) :: (sublist (i + 1) 20 initial)) by admit.
-            rewrite H12, upd_Znth0.
-            assert (Int.repr (t mod 128 + 128) = Int.zero_ext 8
-        (Int.zero_ext 8
-           (Int.repr
-              (Int64.Z_mod_modulus
-                 (Int64.Z_mod_modulus (Int64.Z_mod_modulus t mod 128) + 128))))) by admit.
-            rewrite H13.
-            entailer.
-            admit.
-      + forward_if (EX (i t: Z),
-    PROP  ()
-    LOCAL (
-            temp _t (Vlong (Int64.repr t));
-            temp _idx (Vlong (Int64.repr i));
-            temp _len (Vlong (Int64.repr len));
-            temp _out out_)
-    SEP   (mem_mgr gv; data_at sh (tarray tuchar 20) ((sublist 0 (i) (bytes_to_vals (nat_to_bytes (Z.to_nat len)))) ++ (sublist i 20 initial)) out_)).
-        * repeat forward.
-          Exists (i + 1) t.
-          entailer!!.
-          admit. (* very similar to above! *)
-        * forward. entailer!. Exists i t. autorewrite with sublist in *|-. entailer!.
-        * Intros idx t0. forward.
-          try autorewrite with sublist in *|-.
-          assert (idx = Zlength (nat_to_bytes (Z.to_nat len))) by admit.
-          Exists idx. entailer!.
-          autorewrite with sublist in *|-.
-          entailer!.
-          assert (Zlength (nat_to_bytes (Z.to_nat len)) = Zlength (bytes_to_vals (nat_to_bytes (Z.to_nat len)))). {
-            unfold bytes_to_vals.
-            now repeat rewrite Zlength_map.
-          }
-          rewrite H11, sublist_firstn, ZtoNat_Zlength, firstn_exact_length.
-          entailer.
-Admitted.
+
+    assert ((i -
+Zlength
+(map Vint
+(map Int.repr (map Z.of_nat (nat_to_bytes_fixed 0 (Z.to_nat i) (Z.to_nat len)))))) = 0).
+    Search (Zlength (map _ _)).
+    rewrite Zlength_map. rewrite Zlength_map. rewrite Zlength_map.
+    Search (Zlength _). rewrite Zlength_correct. rewrite nat_to_bytes_fixed_len. Search (Z.of_nat (Z.to_nat _)). rewrite Z2Nat.id. lia. lia.
+
+    rewrite H5.
+    rewrite (sublist_split i (i + 1) 20 initial) by lia.
+
+    Search (upd_Znth 0).
+    specialize (Zlength_sublist i (i + 1) initial ltac:(lia) ltac:(lia)) as Hl.
+    assert (i + 1 - i = 1). lia. rewrite H11 in Hl.
+    destruct (sublist i (i + 1) initial) eqn:Hd. inversion Hl.
+    rewrite Zlength_cons in Hl.
+    Search (Z.succ _).
+    rewrite <- Z.add_1_r in Hl. assert (Zlength l = 0) by lia.
+    clear H11 Hl. destruct l. 2: { rewrite Zlength_cons in H12. specialize (Zlength_nonneg l) as H13. rewrite <- Z.add_1_r in H12. lia. }
+    Search (_ ++ _). simpl. rewrite upd_Znth0.
+
+    rewrite !map_app.
+    simpl map.
+
+    rewrite <- app_assoc.
+    simpl app.
+    f_equal.
+  }
+
+  entailer!.
+
+  - entailer!. hint. list_solve. 
+Qed.
 
 Lemma decode_length_body:
   semax_body Vprog Gprog f_decode_length decode_length_spec.

@@ -42,6 +42,30 @@ Module Tokens.
       | S m => get_nth (x / 128) m
       end.
 
+  Fixpoint nat_to_bytes_fixed (i l x : nat) : list nat :=
+    match l with
+      | 0 => []
+      | S p => get_nth x i :: (nat_to_bytes_fixed (i + 1) (p) x)
+    end.
+
+  Lemma nat_to_bytes_fixed_len : forall l i x,
+    length (nat_to_bytes_fixed i l x) = l.
+  Proof.
+    induction l.
+      - intros. simpl. reflexivity.
+      - intros. simpl. rewrite IHl. reflexivity.
+  Qed.
+
+  Lemma nat_to_bytes_fixed_sn : forall l i x,
+  nat_to_bytes_fixed i (S l) x = nat_to_bytes_fixed i l x ++ [get_nth x (i + l)].
+  Proof.
+    induction l.
+      - intros. simpl. assert (i + 0 = i) by lia. rewrite H. reflexivity.  
+      - intros. assert ((nat_to_bytes_fixed i (S (S l)) x) = ((get_nth x (i)) :: (nat_to_bytes_fixed (i+1) (S (l)) x))).
+        simpl. reflexivity.
+        rewrite H. rewrite IHl. simpl. assert (i + 1 + l = i + S l) by lia. rewrite H0. reflexivity.
+  Qed.
+
   Fixpoint nat_to_bytes_fueled (fuel n: nat): list byte :=
     match fuel with
     | 0 => []

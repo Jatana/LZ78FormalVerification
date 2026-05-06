@@ -73,60 +73,33 @@ Definition ___compcert_va_composite : ident := $"__compcert_va_composite".
 Definition ___compcert_va_float64 : ident := $"__compcert_va_float64".
 Definition ___compcert_va_int32 : ident := $"__compcert_va_int32".
 Definition ___compcert_va_int64 : ident := $"__compcert_va_int64".
-Definition _b0 : ident := $"b0".
-Definition _b1 : ident := $"b1".
 Definition _best_len : ident := $"best_len".
 Definition _best_off : ident := $"best_off".
-Definition _compress : ident := $"compress".
 Definition _decode_length : ident := $"decode_length".
-Definition _decompress : ident := $"decompress".
 Definition _encode_length : ident := $"encode_length".
 Definition _exit : ident := $"exit".
 Definition _find_largest_match : ident := $"find_largest_match".
-Definition _flag : ident := $"flag".
-Definition _flag_i : ident := $"flag_i".
 Definition _get_nth : ident := $"get_nth".
 Definition _i : ident := $"i".
 Definition _idx : ident := $"idx".
 Definition _in : ident := $"in".
-Definition _in_i : ident := $"in_i".
 Definition _in_len : ident := $"in_len".
-Definition _k : ident := $"k".
 Definition _len : ident := $"len".
-Definition _len_opt : ident := $"len_opt".
 Definition _main : ident := $"main".
 Definition _malloc : ident := $"malloc".
 Definition _match_len : ident := $"match_len".
 Definition _max_match_len : ident := $"max_match_len".
 Definition _n : ident := $"n".
 Definition _off : ident := $"off".
-Definition _off_hi : ident := $"off_hi".
-Definition _off_lo : ident := $"off_lo".
-Definition _off_opt : ident := $"off_opt".
 Definition _out : ident := $"out".
-Definition _out_i : ident := $"out_i".
-Definition _out_len : ident := $"out_len".
 Definition _p : ident := $"p".
 Definition _start : ident := $"start".
 Definition _surely_malloc : ident := $"surely_malloc".
-Definition _t : ident := $"t".
-Definition _token_count : ident := $"token_count".
 Definition _x : ident := $"x".
 Definition _t'1 : ident := 128%positive.
-Definition _t'10 : ident := 137%positive.
-Definition _t'11 : ident := 138%positive.
-Definition _t'12 : ident := 139%positive.
-Definition _t'13 : ident := 140%positive.
-Definition _t'14 : ident := 141%positive.
-Definition _t'15 : ident := 142%positive.
 Definition _t'2 : ident := 129%positive.
 Definition _t'3 : ident := 130%positive.
 Definition _t'4 : ident := 131%positive.
-Definition _t'5 : ident := 132%positive.
-Definition _t'6 : ident := 133%positive.
-Definition _t'7 : ident := 134%positive.
-Definition _t'8 : ident := 135%positive.
-Definition _t'9 : ident := 136%positive.
 
 Definition f_surely_malloc := {|
   fn_return := (tptr tvoid);
@@ -177,65 +150,31 @@ Definition f_get_nth := {|
 |}.
 
 Definition f_encode_length := {|
-  fn_return := tulong;
+  fn_return := tvoid;
   fn_callconv := cc_default;
   fn_params := ((_len, tulong) :: (_out, (tptr tuchar)) :: nil);
   fn_vars := nil;
-  fn_temps := ((_idx, tulong) :: (_t, tulong) :: (_t'2, tulong) ::
-               (_t'1, tulong) :: nil);
+  fn_temps := ((_i, tint) :: (_t'1, tuchar) :: nil);
   fn_body :=
 (Ssequence
-  (Sifthenelse (Ebinop Oeq (Etempvar _len tulong)
-                 (Econst_int (Int.repr 0) tint) tint)
-    (Sreturn (Some (Econst_int (Int.repr 0) tint)))
-    Sskip)
-  (Ssequence
-    (Sset _idx (Ecast (Econst_int (Int.repr 0) tint) tulong))
+  (Sset _i (Econst_int (Int.repr 0) tint))
+  (Sloop
     (Ssequence
-      (Sset _t (Etempvar _len tulong))
+      (Sifthenelse (Ebinop Olt (Etempvar _i tint)
+                     (Econst_int (Int.repr 20) tint) tint)
+        Sskip
+        Sbreak)
       (Ssequence
-        (Swhile
-          (Ebinop Oge (Etempvar _t tulong) (Econst_int (Int.repr 128) tint)
-            tint)
-          (Ssequence
-            (Ssequence
-              (Ssequence
-                (Sset _t'1 (Etempvar _idx tulong))
-                (Sset _idx
-                  (Ebinop Oadd (Etempvar _t'1 tulong)
-                    (Econst_int (Int.repr 1) tint) tulong)))
-              (Sassign
-                (Ederef
-                  (Ebinop Oadd (Etempvar _out (tptr tuchar))
-                    (Etempvar _t'1 tulong) (tptr tuchar)) tuchar)
-                (Ecast
-                  (Ebinop Oadd
-                    (Ebinop Omod (Etempvar _t tulong)
-                      (Econst_int (Int.repr 128) tint) tulong)
-                    (Econst_int (Int.repr 128) tint) tulong) tuchar)))
-            (Sset _t
-              (Ebinop Odiv (Etempvar _t tulong)
-                (Econst_int (Int.repr 128) tint) tulong))))
-        (Ssequence
-          (Sifthenelse (Ebinop Ogt (Etempvar _t tulong)
-                         (Econst_int (Int.repr 0) tint) tint)
-            (Ssequence
-              (Ssequence
-                (Sset _t'2 (Etempvar _idx tulong))
-                (Sset _idx
-                  (Ebinop Oadd (Etempvar _t'2 tulong)
-                    (Econst_int (Int.repr 1) tint) tulong)))
-              (Sassign
-                (Ederef
-                  (Ebinop Oadd (Etempvar _out (tptr tuchar))
-                    (Etempvar _t'2 tulong) (tptr tuchar)) tuchar)
-                (Ecast
-                  (Ebinop Oadd
-                    (Ebinop Omod (Etempvar _t tulong)
-                      (Econst_int (Int.repr 128) tint) tulong)
-                    (Econst_int (Int.repr 128) tint) tulong) tuchar)))
-            Sskip)
-          (Sreturn (Some (Etempvar _idx tulong))))))))
+        (Scall (Some _t'1)
+          (Evar _get_nth (Tfunction (tulong :: tulong :: nil) tuchar
+                           cc_default))
+          ((Etempvar _len tulong) :: (Etempvar _i tint) :: nil))
+        (Sassign
+          (Ederef
+            (Ebinop Oadd (Etempvar _out (tptr tuchar)) (Etempvar _i tint)
+              (tptr tuchar)) tuchar) (Etempvar _t'1 tuchar))))
+    (Sset _i
+      (Ebinop Oadd (Etempvar _i tint) (Econst_int (Int.repr 1) tint) tint))))
 |}.
 
 Definition f_decode_length := {|
@@ -413,485 +352,6 @@ Definition f_find_largest_match := {|
                     (Econst_int (Int.repr 0) tint))
                   (Sassign (Ederef (Etempvar _off (tptr tulong)) tulong)
                     (Econst_int (Int.repr 0) tint)))))))))))
-|}.
-
-Definition f_compress := {|
-  fn_return := (tptr tuchar);
-  fn_callconv := cc_default;
-  fn_params := ((_in, (tptr tuchar)) :: (_in_len, tulong) :: nil);
-  fn_vars := ((_len, tulong) :: (_off, tulong) :: nil);
-  fn_temps := ((_out_len, tulong) :: (_out, (tptr tuchar)) ::
-               (_out_i, tulong) :: (_in_i, tulong) :: (_flag, tuchar) ::
-               (_token_count, tuchar) :: (_flag_i, tulong) ::
-               (_len_opt, tulong) :: (_off_opt, tulong) :: (_t'7, tulong) ::
-               (_t'6, tulong) :: (_t'5, tulong) :: (_t'4, tulong) ::
-               (_t'3, tulong) :: (_t'2, tulong) :: (_t'1, (tptr tvoid)) ::
-               (_t'12, tulong) :: (_t'11, tulong) :: (_t'10, tulong) ::
-               (_t'9, tuchar) :: (_t'8, tulong) :: nil);
-  fn_body :=
-(Ssequence
-  (Sset _out_len
-    (Ebinop Oadd
-      (Ebinop Odiv
-        (Ebinop Oadd
-          (Ebinop Omul (Econst_int (Int.repr 9) tint)
-            (Etempvar _in_len tulong) tulong) (Econst_int (Int.repr 7) tint)
-          tulong) (Econst_int (Int.repr 8) tint) tulong)
-      (Econst_int (Int.repr 65) tint) tulong))
-  (Ssequence
-    (Ssequence
-      (Scall (Some _t'1)
-        (Evar _surely_malloc (Tfunction (tulong :: nil) (tptr tvoid)
-                               cc_default))
-        ((Etempvar _out_len tulong) :: nil))
-      (Sset _out (Ecast (Etempvar _t'1 (tptr tvoid)) (tptr tuchar))))
-    (Ssequence
-      (Ssequence
-        (Scall (Some _t'2)
-          (Evar _encode_length (Tfunction (tulong :: (tptr tuchar) :: nil)
-                                 tulong cc_default))
-          ((Etempvar _in_len tulong) :: (Etempvar _out (tptr tuchar)) :: nil))
-        (Sset _out_i (Etempvar _t'2 tulong)))
-      (Ssequence
-        (Sset _in_i (Ecast (Econst_int (Int.repr 0) tint) tulong))
-        (Ssequence
-          (Sset _flag (Ecast (Econst_int (Int.repr 0) tint) tuchar))
-          (Ssequence
-            (Sset _token_count (Ecast (Econst_int (Int.repr 0) tint) tuchar))
-            (Ssequence
-              (Sset _flag_i (Etempvar _out_i tulong))
-              (Ssequence
-                (Sifthenelse (Ebinop Olt (Econst_int (Int.repr 0) tint)
-                               (Etempvar _in_len tulong) tint)
-                  (Sset _out_i
-                    (Ebinop Oadd (Etempvar _out_i tulong)
-                      (Econst_int (Int.repr 1) tint) tulong))
-                  Sskip)
-                (Ssequence
-                  (Swhile
-                    (Ebinop Olt (Etempvar _in_i tulong)
-                      (Etempvar _in_len tulong) tint)
-                    (Ssequence
-                      (Sassign (Evar _len tulong)
-                        (Econst_int (Int.repr 0) tint))
-                      (Ssequence
-                        (Sassign (Evar _off tulong)
-                          (Econst_int (Int.repr 0) tint))
-                        (Ssequence
-                          (Scall None
-                            (Evar _find_largest_match (Tfunction
-                                                        ((tptr tuchar) ::
-                                                         tulong :: tulong ::
-                                                         (tptr tulong) ::
-                                                         (tptr tulong) ::
-                                                         nil) tvoid
-                                                        cc_default))
-                            ((Etempvar _in (tptr tuchar)) ::
-                             (Etempvar _in_len tulong) ::
-                             (Etempvar _in_i tulong) ::
-                             (Eaddrof (Evar _len tulong) (tptr tulong)) ::
-                             (Eaddrof (Evar _off tulong) (tptr tulong)) ::
-                             nil))
-                          (Ssequence
-                            (Ssequence
-                              (Sset _t'8 (Evar _len tulong))
-                              (Sifthenelse (Ebinop Ole
-                                             (Econst_int (Int.repr 3) tint)
-                                             (Etempvar _t'8 tulong) tint)
-                                (Ssequence
-                                  (Sset _flag
-                                    (Ecast
-                                      (Ebinop Oshl (Etempvar _flag tuchar)
-                                        (Econst_int (Int.repr 1) tint) tint)
-                                      tuchar))
-                                  (Ssequence
-                                    (Ssequence
-                                      (Sset _t'12 (Evar _len tulong))
-                                      (Sset _len_opt
-                                        (Ebinop Osub (Etempvar _t'12 tulong)
-                                          (Econst_int (Int.repr 3) tint)
-                                          tulong)))
-                                    (Ssequence
-                                      (Ssequence
-                                        (Sset _t'11 (Evar _off tulong))
-                                        (Sset _off_opt
-                                          (Ebinop Osub
-                                            (Etempvar _t'11 tulong)
-                                            (Econst_int (Int.repr 3) tint)
-                                            tulong)))
-                                      (Ssequence
-                                        (Ssequence
-                                          (Ssequence
-                                            (Sset _t'3
-                                              (Etempvar _out_i tulong))
-                                            (Sset _out_i
-                                              (Ebinop Oadd
-                                                (Etempvar _t'3 tulong)
-                                                (Econst_int (Int.repr 1) tint)
-                                                tulong)))
-                                          (Sassign
-                                            (Ederef
-                                              (Ebinop Oadd
-                                                (Etempvar _out (tptr tuchar))
-                                                (Etempvar _t'3 tulong)
-                                                (tptr tuchar)) tuchar)
-                                            (Ebinop Oor
-                                              (Ebinop Oshl
-                                                (Etempvar _len_opt tulong)
-                                                (Econst_int (Int.repr 4) tint)
-                                                tulong)
-                                              (Ecast
-                                                (Ebinop Oshr
-                                                  (Etempvar _off_opt tulong)
-                                                  (Econst_int (Int.repr 8) tint)
-                                                  tulong) tuchar) tulong)))
-                                        (Ssequence
-                                          (Ssequence
-                                            (Ssequence
-                                              (Sset _t'4
-                                                (Etempvar _out_i tulong))
-                                              (Sset _out_i
-                                                (Ebinop Oadd
-                                                  (Etempvar _t'4 tulong)
-                                                  (Econst_int (Int.repr 1) tint)
-                                                  tulong)))
-                                            (Sassign
-                                              (Ederef
-                                                (Ebinop Oadd
-                                                  (Etempvar _out (tptr tuchar))
-                                                  (Etempvar _t'4 tulong)
-                                                  (tptr tuchar)) tuchar)
-                                              (Ecast
-                                                (Etempvar _off_opt tulong)
-                                                tuchar)))
-                                          (Ssequence
-                                            (Sset _t'10 (Evar _len tulong))
-                                            (Sset _in_i
-                                              (Ebinop Oadd
-                                                (Etempvar _in_i tulong)
-                                                (Etempvar _t'10 tulong)
-                                                tulong))))))))
-                                (Ssequence
-                                  (Sset _flag
-                                    (Ecast
-                                      (Ebinop Oor
-                                        (Ebinop Oshl (Etempvar _flag tuchar)
-                                          (Econst_int (Int.repr 1) tint)
-                                          tint)
-                                        (Econst_int (Int.repr 1) tint) tint)
-                                      tuchar))
-                                  (Ssequence
-                                    (Ssequence
-                                      (Ssequence
-                                        (Ssequence
-                                          (Sset _t'5
-                                            (Etempvar _out_i tulong))
-                                          (Sset _out_i
-                                            (Ebinop Oadd
-                                              (Etempvar _t'5 tulong)
-                                              (Econst_int (Int.repr 1) tint)
-                                              tulong)))
-                                        (Sset _t'6 (Etempvar _in_i tulong)))
-                                      (Sset _in_i
-                                        (Ebinop Oadd (Etempvar _t'6 tulong)
-                                          (Econst_int (Int.repr 1) tint)
-                                          tulong)))
-                                    (Ssequence
-                                      (Sset _t'9
-                                        (Ederef
-                                          (Ebinop Oadd
-                                            (Etempvar _in (tptr tuchar))
-                                            (Etempvar _t'6 tulong)
-                                            (tptr tuchar)) tuchar))
-                                      (Sassign
-                                        (Ederef
-                                          (Ebinop Oadd
-                                            (Etempvar _out (tptr tuchar))
-                                            (Etempvar _t'5 tulong)
-                                            (tptr tuchar)) tuchar)
-                                        (Etempvar _t'9 tuchar)))))))
-                            (Ssequence
-                              (Sset _token_count
-                                (Ecast
-                                  (Ebinop Oadd (Etempvar _token_count tuchar)
-                                    (Econst_int (Int.repr 1) tint) tint)
-                                  tuchar))
-                              (Sifthenelse (Ebinop Oeq
-                                             (Etempvar _token_count tuchar)
-                                             (Econst_int (Int.repr 8) tint)
-                                             tint)
-                                (Ssequence
-                                  (Sassign
-                                    (Ederef
-                                      (Ebinop Oadd
-                                        (Etempvar _out (tptr tuchar))
-                                        (Etempvar _flag_i tulong)
-                                        (tptr tuchar)) tuchar)
-                                    (Etempvar _flag tuchar))
-                                  (Ssequence
-                                    (Sset _flag
-                                      (Ecast (Econst_int (Int.repr 0) tint)
-                                        tuchar))
-                                    (Ssequence
-                                      (Sset _token_count
-                                        (Ecast (Econst_int (Int.repr 0) tint)
-                                          tuchar))
-                                      (Ssequence
-                                        (Ssequence
-                                          (Sset _t'7
-                                            (Etempvar _out_i tulong))
-                                          (Sset _out_i
-                                            (Ebinop Oadd
-                                              (Etempvar _t'7 tulong)
-                                              (Econst_int (Int.repr 1) tint)
-                                              tulong)))
-                                        (Sset _flag_i (Etempvar _t'7 tulong))))))
-                                Sskip)))))))
-                  (Ssequence
-                    (Sifthenelse (Ebinop Olt (Econst_int (Int.repr 0) tint)
-                                   (Etempvar _token_count tuchar) tint)
-                      (Ssequence
-                        (Sset _flag
-                          (Ecast
-                            (Ebinop Oshl (Etempvar _flag tuchar)
-                              (Ebinop Osub (Econst_int (Int.repr 8) tint)
-                                (Etempvar _token_count tuchar) tint) tint)
-                            tuchar))
-                        (Sassign
-                          (Ederef
-                            (Ebinop Oadd (Etempvar _out (tptr tuchar))
-                              (Etempvar _flag_i tulong) (tptr tuchar))
-                            tuchar) (Etempvar _flag tuchar)))
-                      Sskip)
-                    (Sreturn (Some (Etempvar _out (tptr tuchar))))))))))))))
-|}.
-
-Definition f_decompress := {|
-  fn_return := (tptr tuchar);
-  fn_callconv := cc_default;
-  fn_params := ((_in, (tptr tuchar)) :: (_in_len, tulong) :: nil);
-  fn_vars := ((_out_len, tulong) :: nil);
-  fn_temps := ((_in_i, tulong) :: (_out_i, tulong) ::
-               (_out, (tptr tuchar)) :: (_flag, tuchar) ::
-               (_token_count, tuchar) :: (_flag_i, tulong) ::
-               (_b0, tuchar) :: (_b1, tuchar) :: (_len_opt, tuchar) ::
-               (_off_hi, tuchar) :: (_off_lo, tuchar) :: (_len, tulong) ::
-               (_off, tulong) :: (_k, tulong) :: (_t'8, tulong) ::
-               (_t'7, tulong) :: (_t'6, tulong) :: (_t'5, tulong) ::
-               (_t'4, tulong) :: (_t'3, tint) :: (_t'2, (tptr tvoid)) ::
-               (_t'1, tulong) :: (_t'15, tulong) :: (_t'14, tulong) ::
-               (_t'13, tuchar) :: (_t'12, tuchar) :: (_t'11, tuchar) ::
-               (_t'10, tuchar) :: (_t'9, tuchar) :: nil);
-  fn_body :=
-(Ssequence
-  (Sassign (Evar _out_len tulong) (Econst_int (Int.repr 0) tint))
-  (Ssequence
-    (Ssequence
-      (Scall (Some _t'1)
-        (Evar _decode_length (Tfunction
-                               ((tptr tuchar) :: tulong :: (tptr tulong) ::
-                                nil) tulong cc_default))
-        ((Etempvar _in (tptr tuchar)) :: (Etempvar _in_len tulong) ::
-         (Eaddrof (Evar _out_len tulong) (tptr tulong)) :: nil))
-      (Sset _in_i (Etempvar _t'1 tulong)))
-    (Ssequence
-      (Sset _out_i (Ecast (Econst_int (Int.repr 0) tint) tulong))
-      (Ssequence
-        (Ssequence
-          (Ssequence
-            (Sset _t'15 (Evar _out_len tulong))
-            (Scall (Some _t'2)
-              (Evar _surely_malloc (Tfunction (tulong :: nil) (tptr tvoid)
-                                     cc_default))
-              ((Etempvar _t'15 tulong) :: nil)))
-          (Sset _out (Ecast (Etempvar _t'2 (tptr tvoid)) (tptr tuchar))))
-        (Ssequence
-          (Sset _flag (Ecast (Econst_int (Int.repr 0) tint) tuchar))
-          (Ssequence
-            (Sset _token_count (Ecast (Econst_int (Int.repr 0) tint) tuchar))
-            (Ssequence
-              (Sset _flag_i (Etempvar _out_i tulong))
-              (Ssequence
-                (Sloop
-                  (Ssequence
-                    (Ssequence
-                      (Ssequence
-                        (Sset _t'14 (Evar _out_len tulong))
-                        (Sifthenelse (Ebinop Olt (Etempvar _out_i tulong)
-                                       (Etempvar _t'14 tulong) tint)
-                          (Sset _t'3
-                            (Ecast
-                              (Ebinop Olt (Etempvar _in_i tulong)
-                                (Etempvar _in_len tulong) tint) tbool))
-                          (Sset _t'3 (Econst_int (Int.repr 0) tint))))
-                      (Sifthenelse (Etempvar _t'3 tint) Sskip Sbreak))
-                    (Ssequence
-                      (Sifthenelse (Ebinop Oeq (Etempvar _token_count tuchar)
-                                     (Econst_int (Int.repr 0) tint) tint)
-                        (Ssequence
-                          (Ssequence
-                            (Ssequence
-                              (Sset _t'4 (Etempvar _in_i tulong))
-                              (Sset _in_i
-                                (Ebinop Oadd (Etempvar _t'4 tulong)
-                                  (Econst_int (Int.repr 1) tint) tulong)))
-                            (Ssequence
-                              (Sset _t'13
-                                (Ederef
-                                  (Ebinop Oadd (Etempvar _in (tptr tuchar))
-                                    (Etempvar _t'4 tulong) (tptr tuchar))
-                                  tuchar))
-                              (Sset _flag
-                                (Ecast (Etempvar _t'13 tuchar) tuchar))))
-                          (Sset _token_count
-                            (Ecast (Econst_int (Int.repr 8) tint) tuchar)))
-                        Sskip)
-                      (Ssequence
-                        (Sifthenelse (Ebinop Oshr (Etempvar _flag tuchar)
-                                       (Econst_int (Int.repr 7) tint) tint)
-                          (Ssequence
-                            (Ssequence
-                              (Ssequence
-                                (Ssequence
-                                  (Sset _t'5 (Etempvar _out_i tulong))
-                                  (Sset _out_i
-                                    (Ebinop Oadd (Etempvar _t'5 tulong)
-                                      (Econst_int (Int.repr 1) tint) tulong)))
-                                (Sset _t'6 (Etempvar _in_i tulong)))
-                              (Sset _in_i
-                                (Ebinop Oadd (Etempvar _t'6 tulong)
-                                  (Econst_int (Int.repr 1) tint) tulong)))
-                            (Ssequence
-                              (Sset _t'12
-                                (Ederef
-                                  (Ebinop Oadd (Etempvar _in (tptr tuchar))
-                                    (Etempvar _t'6 tulong) (tptr tuchar))
-                                  tuchar))
-                              (Sassign
-                                (Ederef
-                                  (Ebinop Oadd (Etempvar _out (tptr tuchar))
-                                    (Etempvar _t'5 tulong) (tptr tuchar))
-                                  tuchar) (Etempvar _t'12 tuchar))))
-                          (Ssequence
-                            (Ssequence
-                              (Ssequence
-                                (Sset _t'7 (Etempvar _in_i tulong))
-                                (Sset _in_i
-                                  (Ebinop Oadd (Etempvar _t'7 tulong)
-                                    (Econst_int (Int.repr 1) tint) tulong)))
-                              (Ssequence
-                                (Sset _t'11
-                                  (Ederef
-                                    (Ebinop Oadd (Etempvar _in (tptr tuchar))
-                                      (Etempvar _t'7 tulong) (tptr tuchar))
-                                    tuchar))
-                                (Sset _b0
-                                  (Ecast (Etempvar _t'11 tuchar) tuchar))))
-                            (Ssequence
-                              (Ssequence
-                                (Ssequence
-                                  (Sset _t'8 (Etempvar _in_i tulong))
-                                  (Sset _in_i
-                                    (Ebinop Oadd (Etempvar _t'8 tulong)
-                                      (Econst_int (Int.repr 1) tint) tulong)))
-                                (Ssequence
-                                  (Sset _t'10
-                                    (Ederef
-                                      (Ebinop Oadd
-                                        (Etempvar _in (tptr tuchar))
-                                        (Etempvar _t'8 tulong) (tptr tuchar))
-                                      tuchar))
-                                  (Sset _b1
-                                    (Ecast (Etempvar _t'10 tuchar) tuchar))))
-                              (Ssequence
-                                (Sset _len_opt
-                                  (Ecast
-                                    (Ebinop Oshr (Etempvar _b0 tuchar)
-                                      (Econst_int (Int.repr 4) tint) tint)
-                                    tuchar))
-                                (Ssequence
-                                  (Sset _off_hi
-                                    (Ecast
-                                      (Ebinop Oand (Etempvar _b0 tuchar)
-                                        (Econst_int (Int.repr 15) tint) tint)
-                                      tuchar))
-                                  (Ssequence
-                                    (Sset _off_lo
-                                      (Ecast (Etempvar _b1 tuchar) tuchar))
-                                    (Ssequence
-                                      (Sset _len
-                                        (Ecast
-                                          (Ebinop Oadd
-                                            (Etempvar _len_opt tuchar)
-                                            (Econst_int (Int.repr 3) tint)
-                                            tint) tulong))
-                                      (Ssequence
-                                        (Sset _off
-                                          (Ecast
-                                            (Ebinop Oadd
-                                              (Ebinop Oadd
-                                                (Ebinop Oshl
-                                                  (Etempvar _off_hi tuchar)
-                                                  (Econst_int (Int.repr 8) tint)
-                                                  tint)
-                                                (Etempvar _off_lo tuchar)
-                                                tint)
-                                              (Econst_int (Int.repr 3) tint)
-                                              tint) tulong))
-                                        (Ssequence
-                                          (Sset _k
-                                            (Ecast
-                                              (Econst_int (Int.repr 0) tint)
-                                              tulong))
-                                          (Sloop
-                                            (Ssequence
-                                              (Sifthenelse (Ebinop Olt
-                                                             (Etempvar _k tulong)
-                                                             (Etempvar _len tulong)
-                                                             tint)
-                                                Sskip
-                                                Sbreak)
-                                              (Ssequence
-                                                (Ssequence
-                                                  (Sset _t'9
-                                                    (Ederef
-                                                      (Ebinop Oadd
-                                                        (Etempvar _out (tptr tuchar))
-                                                        (Ebinop Osub
-                                                          (Etempvar _out_i tulong)
-                                                          (Etempvar _off tulong)
-                                                          tulong)
-                                                        (tptr tuchar))
-                                                      tuchar))
-                                                  (Sassign
-                                                    (Ederef
-                                                      (Ebinop Oadd
-                                                        (Etempvar _out (tptr tuchar))
-                                                        (Etempvar _out_i tulong)
-                                                        (tptr tuchar))
-                                                      tuchar)
-                                                    (Etempvar _t'9 tuchar)))
-                                                (Sset _out_i
-                                                  (Ebinop Oadd
-                                                    (Etempvar _out_i tulong)
-                                                    (Econst_int (Int.repr 1) tint)
-                                                    tulong))))
-                                            (Sset _k
-                                              (Ebinop Oadd
-                                                (Etempvar _k tulong)
-                                                (Econst_int (Int.repr 1) tint)
-                                                tulong))))))))))))
-                        (Ssequence
-                          (Sset _flag
-                            (Ecast
-                              (Ebinop Oshl (Etempvar _flag tuchar)
-                                (Econst_int (Int.repr 1) tint) tint) tuchar))
-                          (Sset _token_count
-                            (Ecast
-                              (Ebinop Osub (Etempvar _token_count tuchar)
-                                (Econst_int (Int.repr 1) tint) tint) tuchar))))))
-                  Sskip)
-                (Sreturn (Some (Etempvar _out (tptr tuchar))))))))))))
 |}.
 
 Definition f_main := {|
@@ -1161,16 +621,14 @@ Definition global_definitions : list (ident * globdef fundef type) :=
  (_encode_length, Gfun(Internal f_encode_length)) ::
  (_decode_length, Gfun(Internal f_decode_length)) ::
  (_find_largest_match, Gfun(Internal f_find_largest_match)) ::
- (_compress, Gfun(Internal f_compress)) ::
- (_decompress, Gfun(Internal f_decompress)) ::
  (_main, Gfun(Internal f_main)) :: nil).
 
 Definition public_idents : list ident :=
-(_main :: _decompress :: _compress :: _find_largest_match ::
- _decode_length :: _encode_length :: _get_nth :: _surely_malloc :: _exit ::
- _malloc :: ___builtin_debug :: ___builtin_fmin :: ___builtin_fmax ::
- ___builtin_fnmsub :: ___builtin_fnmadd :: ___builtin_fmsub ::
- ___builtin_fmadd :: ___builtin_clsll :: ___builtin_clsl :: ___builtin_cls ::
+(_main :: _find_largest_match :: _decode_length :: _encode_length ::
+ _get_nth :: _surely_malloc :: _exit :: _malloc :: ___builtin_debug ::
+ ___builtin_fmin :: ___builtin_fmax :: ___builtin_fnmsub ::
+ ___builtin_fnmadd :: ___builtin_fmsub :: ___builtin_fmadd ::
+ ___builtin_clsll :: ___builtin_clsl :: ___builtin_cls ::
  ___builtin_expect :: ___builtin_unreachable :: ___builtin_va_end ::
  ___builtin_va_copy :: ___builtin_va_arg :: ___builtin_va_start ::
  ___builtin_membar :: ___builtin_annot_intval :: ___builtin_annot ::
