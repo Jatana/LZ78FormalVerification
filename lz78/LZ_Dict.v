@@ -30,15 +30,42 @@ Module Dict.
   Definition find_largest_prefix (dict: dict_type) (s: list byte) :=
     find_largest_prefix' dict s 0 0 0.
 
+  Lemma num_bytes_for_dict_gt_one: forall dict_size,
+    1 <= num_bytes_for_dict dict_size.
+  Proof.
+    intros.
+    unfold num_bytes_for_dict.
+    destruct (dict_size <=? 1); lia.
+  Qed.
 
   Lemma prefix_eq_correctness: forall p s,
     prefix_eq p s = true <-> firstn (length p) s = p.
-  Proof. Admitted.
+  Proof.
+    induction p; simpl; intros.
+    - tauto.
+    - destruct s.
+      + split; intros; discriminate.
+      + split; intros; destruct (a =? b)%byte eqn:Heqb.
+        * apply byte_dec_bl in Heqb.
+          f_equal.
+          -- auto.
+          -- apply IHp. assumption.
+        * discriminate.
+        * apply IHp.
+          injection H as H.
+          assumption.
+        * apply eqb_false in Heqb.
+          injection H as H.
+          rewrite H in Heqb.
+          contradiction.
+  Qed.
 
   Lemma find_largest_prefix_correctness: forall dict s index len,
     find_largest_prefix dict s = (index, len) ->
+    In [] dict ->
     len <= length s /\ nth_error dict index = Some (firstn len s).
-  Proof. Admitted.
+  Proof.
+  Admitted.
 
 End Dict.
 

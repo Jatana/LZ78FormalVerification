@@ -48,10 +48,55 @@ Module Impl.
     decompress (bytes_to_tokens s).
 
 
+  Lemma compress'_valid_tokens: forall fuel s dict,
+    length s <= fuel ->
+    valid_tokens (compress' fuel dict s).
+  Proof.
+    induction fuel, s; simpl; intros; try constructor.
+    destruct (find_largest_prefix dict (b :: s)) as [index len].
+    destruct (skipn len (b :: s)) eqn:?; simpl; try constructor.
+    apply IHfuel.
+    pose proof (length_skipn len (b :: s)) as Hls.
+    rewrite Heql in Hls.
+    simpl in Hls.
+    destruct len; lia.
+  Qed.
+
   Lemma compress_correctness': forall fuel dict s,
     length s <= fuel ->
+    In [] dict ->
     decompress' dict (compress' fuel dict s) = s.
-  Proof. Admitted.
+  Proof.
+    induction fuel; simpl; intros dict s Hlen Hin.
+    - inversion Hlen.
+      now apply length_zero_iff_nil in H0.
+    - destruct s; try reflexivity.
+      destruct (find_largest_prefix dict (b :: s)) as [index len] eqn:?.
+      pose proof (find_largest_prefix_correctness dict (b :: s) index len Heqp Hin) as [_ Hs].
+      pose proof (firstn_skipn len (b :: s)) as Hfs.
+      destruct (skipn len (b :: s)) eqn:?; simpl.
+      + rewrite app_nil_r in Hfs.
+        rewrite Hfs in Hs.
+        now rewrite Hs.
+      + rewrite <- Hfs, Hs, app_inv_head_iff.
+        f_equal.
+        assert (Hlf: length l <= fuel). {
+          rewrite <- Hfs, length_app, length_cons in Hlen.
+          lia.
+        }
+        assert (Hinapp: In [] (dict ++ [firstn len (b :: s) ++ [b0]])). {
+          apply in_or_app.
+          now left.
+        }
+        specialize (IHfuel (dict ++ [firstn len (b :: s) ++ [b0]]) l Hlf Hinapp).
+        assert (Hd: dict ++ [firstn len (firstn len (b :: s) ++ b0 :: l) ++ [b0]] = 
+                dict ++ [firstn len (b :: s) ++ [b0]]). {
+         rewrite app_inv_head_iff.
+         f_equal.
+         now rewrite app_inv_tail_iff, Hfs.
+        }
+        now rewrite Hd.
+  Qed.
 
   Theorem compress_correctness: forall s,
     decompress_from_bytes (compress_to_bytes s) = s.
@@ -59,8 +104,13 @@ Module Impl.
     intros.
     unfold compress_to_bytes, decompress_from_bytes.
     rewrite (tokens_to_bytes_correctness (compress s)).
-    eapply compress_correctness'.
-    lia.
+    - eapply compress_correctness'.
+      + lia.
+      + unfold empty_dict.
+        simpl.
+        now left.
+    - apply compress'_valid_tokens.
+      lia.
   Qed.
 
 End Impl.

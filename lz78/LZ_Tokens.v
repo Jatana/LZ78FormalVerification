@@ -8,6 +8,13 @@ Module Tokens.
     | Tok (index: nat) (next: byte)
     | Last (index: nat).
 
+  Fixpoint valid_tokens (tokens: list Token) :=
+    match tokens with
+    | Tok _ _ :: rest => valid_tokens rest
+    | Last _ :: _ :: _ => False
+    | _ => True
+    end.
+
   Definition nat_to_byte (n: nat): byte :=
     match of_nat (n mod 256) with
     | Some b => b
@@ -76,23 +83,47 @@ Module Tokens.
       lia.
   Qed.
 
+  Arguments Nat.modulo : simpl never.
+  Arguments Nat.divmod : simpl never.
+  Arguments Nat.pow : simpl never.
+  Arguments Nat.div : simpl never.
+  Arguments Nat.mul : simpl never.
+
   Lemma nat_to_k_bytes_correctness: forall k n,
     n < 256 ^ k ->
     k_bytes_to_nat (nat_to_k_bytes k n) = n.
-  Proof. Admitted.
+  Proof.
+    induction k; simpl; intros n Hnlt.
+    - rewrite Nat.pow_0_r in Hnlt.
+      lia.
+    - rewrite IHk.
+      + rewrite nat_to_byte_correctness.
+        * pose proof (Nat.div_mod_eq n 256).
+          lia.
+        * apply Nat.mod_upper_bound.
+          lia.
+      + rewrite Nat.pow_succ_r in Hnlt by lia.
+        apply Nat.Div0.div_lt_upper_bound.
+        lia.
+  Qed.
 
-  Lemma tokens_to_bytes_correctness': forall fuel dict_size tokens bytes,
+  (* The Hypothesis are not strong enough! *)
+  Lemma tokens_to_bytes_correctness': forall fuel tokens dict_size bytes,
     length bytes <= fuel ->
+    valid_tokens tokens ->
     tokens_to_bytes' dict_size tokens = bytes ->
     bytes_to_tokens' fuel dict_size bytes = tokens.
-  Proof. Admitted.
+  Proof.
+  Admitted.
 
   Lemma tokens_to_bytes_correctness: forall tokens,
+    valid_tokens tokens ->
     bytes_to_tokens (tokens_to_bytes tokens) = tokens.
   Proof.
     intros.
     eapply tokens_to_bytes_correctness'.
     - lia.
+    - assumption.
     - reflexivity.
   Qed.
 
