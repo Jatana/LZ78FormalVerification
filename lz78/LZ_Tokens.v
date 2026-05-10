@@ -126,6 +126,13 @@ Module Tokens.
     - assumption.
     - reflexivity.
   Qed.
+  
+  Lemma length_nat_to_k_bytes :
+    forall k n,
+      length (nat_to_k_bytes k n) = k.
+  Proof.
+    induction k; simpl; intros; auto.
+  Qed.
 
 End Tokens.
 

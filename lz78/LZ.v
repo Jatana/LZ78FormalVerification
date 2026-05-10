@@ -99,7 +99,7 @@ Module Impl.
   Qed.
 
   Theorem compress_correctness: forall s,
-    decompress_from_bytes (compress_to_bytes s) = s.
+      decompress_from_bytes (compress_to_bytes s) = s.
   Proof.
     intros.
     unfold compress_to_bytes, decompress_from_bytes.
@@ -112,5 +112,61 @@ Module Impl.
     - apply compress'_valid_tokens.
       lia.
   Qed.
+
+  Lemma compress'_length_le_fuel : forall fuel dict s,
+      length (compress' fuel dict s) <= fuel.
+  Proof.
+    induction fuel as [|fuel IH]; intros dict s; simpl.
+    - lia.
+    - destruct s as [|b s]; simpl.
+      + lia.
+      + destruct (find_largest_prefix dict (b :: s)) as [index len].
+        destruct (skipn len (b :: s)) as [|next rest]; simpl.
+        * lia.
+        * specialize (IH (dict ++ [firstn len (b :: s) ++ [next]]) rest).
+          lia.
+  Qed.
+
+  Theorem compress_length_upperbound : forall s,
+      length (compress s) <= length s.
+  Proof.
+    intros s.
+    unfold compress.
+    apply compress'_length_le_fuel.
+  Qed.
+
+  Lemma tokens_to_bytes'_length_bound : forall tokens dict_size max_dict_size,
+      dict_size + length tokens <= max_dict_size ->
+      length (tokens_to_bytes' dict_size tokens)
+      <= length tokens * (num_bytes_for_dict max_dict_size + 1).
+  Proof.
+    induction tokens as [|tok rest IH]; intros dict_size max_dict_size Hbound.
+    - simpl. lia.
+    - assert (Hdict : dict_size <= max_dict_size) by lia.
+      pose proof (num_bytes_for_dict_mono dict_size max_dict_size Hdict) as Hmono.
+      destruct tok as [index next | index]; simpl in *.
+      + rewrite length_app.
+        rewrite length_nat_to_k_bytes. simpl.
+        assert (Hrec : S dict_size + length rest <= max_dict_size) by lia.
+        specialize (IH (S dict_size) max_dict_size Hrec).
+        lia.
+      + rewrite length_nat_to_k_bytes.
+        lia.
+  Qed.
+
+  Theorem compress_to_bytes_upperbound : forall s,
+      length (compress_to_bytes s)
+      <= length s * (num_bytes_for_dict (S (length s)) + 1).
+  Proof.
+    intros s.
+    unfold compress_to_bytes, tokens_to_bytes.
+    eapply Nat.le_trans.
+    2: { apply Nat.mul_le_mono_r.
+         apply compress_length_upperbound. }
+    apply tokens_to_bytes'_length_bound.
+    pose proof (compress_length_upperbound s).
+    simpl in *. Search (S _ <= S _). apply Nat.succ_le_mono in H.
+    assumption.
+  Qed. 
 
 End Impl.
