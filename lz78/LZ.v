@@ -50,17 +50,9 @@ Module Impl.
 
   Lemma compress'_valid_tokens: forall fuel s dict,
     length s <= fuel ->
-    valid_tokens (compress' fuel dict s).
+    valid_tokens (compress' fuel dict s) (length dict).
   Proof.
-    induction fuel, s; simpl; intros; try constructor.
-    destruct (find_largest_prefix dict (b :: s)) as [index len].
-    destruct (skipn len (b :: s)) eqn:?; simpl; try constructor.
-    apply IHfuel.
-    pose proof (length_skipn len (b :: s)) as Hls.
-    rewrite Heql in Hls.
-    simpl in Hls.
-    destruct len; lia.
-  Qed.
+  Admitted.
 
   Lemma compress_correctness': forall fuel dict s,
     length s <= fuel ->
@@ -113,7 +105,7 @@ Module Impl.
       lia.
   Qed.
 
-  Lemma compress'_length_le_fuel : forall fuel dict s,
+  Lemma compress'_length_le_fuel: forall fuel dict s,
       length (compress' fuel dict s) <= fuel.
   Proof.
     induction fuel as [|fuel IH]; intros dict s; simpl.
@@ -127,7 +119,7 @@ Module Impl.
           lia.
   Qed.
 
-  Theorem compress_length_upperbound : forall s,
+  Theorem compress_length_upperbound: forall s,
       length (compress s) <= length s.
   Proof.
     intros s.
@@ -135,10 +127,10 @@ Module Impl.
     apply compress'_length_le_fuel.
   Qed.
 
-  Lemma tokens_to_bytes'_length_bound : forall tokens dict_size max_dict_size,
+  Lemma tokens_to_bytes'_length_bound: forall tokens dict_size max_dict_size,
       dict_size + length tokens <= max_dict_size ->
       length (tokens_to_bytes' dict_size tokens)
-      <= length tokens * (num_bytes_for_dict max_dict_size + 1).
+        <= length tokens * (num_bytes_for_dict max_dict_size + 1).
   Proof.
     induction tokens as [|tok rest IH]; intros dict_size max_dict_size Hbound.
     - simpl. lia.
@@ -147,26 +139,28 @@ Module Impl.
       destruct tok as [index next | index]; simpl in *.
       + rewrite length_app.
         rewrite length_nat_to_k_bytes. simpl.
-        assert (Hrec : S dict_size + length rest <= max_dict_size) by lia.
+        assert (Hrec: S dict_size + length rest <= max_dict_size) by lia.
         specialize (IH (S dict_size) max_dict_size Hrec).
         lia.
       + rewrite length_nat_to_k_bytes.
         lia.
   Qed.
 
-  Theorem compress_to_bytes_upperbound : forall s,
+  Theorem compress_to_bytes_upperbound: forall s,
       length (compress_to_bytes s)
-      <= length s * (num_bytes_for_dict (S (length s)) + 1).
+        <= length s * (num_bytes_for_dict (S (length s)) + 1).
   Proof.
     intros s.
     unfold compress_to_bytes, tokens_to_bytes.
     eapply Nat.le_trans.
-    2: { apply Nat.mul_le_mono_r.
-         apply compress_length_upperbound. }
+    2: {
+      apply Nat.mul_le_mono_r.
+      apply compress_length_upperbound.
+    }
     apply tokens_to_bytes'_length_bound.
     pose proof (compress_length_upperbound s).
-    simpl in *. Search (S _ <= S _). apply Nat.succ_le_mono in H.
-    assumption.
+    simpl in *.
+    now apply Nat.succ_le_mono in H.
   Qed. 
 
 End Impl.

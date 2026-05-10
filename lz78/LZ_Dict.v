@@ -66,21 +66,22 @@ Module Dict.
     len <= length s /\ nth_error dict index = Some (firstn len s).
   Proof.
   Admitted.
-  
+
   Lemma num_bytes_for_dict_mono : forall a b,
       a <= b ->
       num_bytes_for_dict a <= num_bytes_for_dict b.
   Proof.
     intros. unfold num_bytes_for_dict.
     destruct (a <=? 1) eqn:Ha;
-      destruct (b <=? 1) eqn:Hb; try lia.
-    2:{ apply Nat.add_le_mono; try lia.
-        apply Nat.Div0.div_le_mono; try lia.        
-        apply Nat.log2_le_mono. lia. }
-    Search (_ <=? _).
+    destruct (b <=? 1) eqn:Hb; try lia.
+    2: {
+      apply Nat.add_le_mono; try lia.
+      apply Nat.Div0.div_le_mono; try lia.        
+      apply Nat.log2_le_mono. lia.
+    }
     rewrite Nat.leb_nle in Ha. 
     rewrite Nat.leb_le in Hb. lia.
-    Qed.
+  Qed.
 
 End Dict.
 
