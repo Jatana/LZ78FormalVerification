@@ -20,6 +20,17 @@ Module Impl.
         end
     end.
 
+  Definition agreement (dict: dict_type) (tokens : list Token) (index : nat) (phr : list bool) (next : bool) :=
+    forall t : Token, In t tokens -> t = Tok index phr next -> In (phr ++ [next]) dict.
+
+  (* Lemma compress_cor1 (fuel : nat) (dict : dict_type) (s : list bool):
+    compress' fuel dict s [tokens] = tokens' -> s = concatentation of phrase(t) ++ next(t) where t over tokens'.
+
+  Lemma compress_cor2 :
+    agreement dict tokens -> compress' fuel dict s tokens = tokens' ->
+      forall t, In t tokens -> forall t', In t' tokens' -> phrase(t) <> phrase(t') or next(t) <> next(t'). *)
+
+
   Definition compress (s: list bool) :=
     compress' (length s) empty_dict s.
 
@@ -44,6 +55,34 @@ Module Impl.
   Definition decompress (tokens: list Token) :=
     decompress' empty_dict tokens.
 
+  Lemma decompress'_indep : forall tokens tokens' dict,
+      list_eq token_equiv tokens tokens' -> (decompress' dict tokens) = (decompress' dict tokens').
+  Proof.
+    induction tokens.
+      - intros. simpl in H. destruct tokens'. 
+        -- auto.
+        -- inversion H.
+      - intros.
+        simpl.
+        simpl in H. destruct tokens'.
+          + inversion H.
+          + destruct H as (Ha & Hb). unfold token_equiv in Ha. destruct a eqn:Hd.
+            * destruct t eqn:Hdt.
+              -- inversion Ha. subst. simpl. destruct (nth_error dict index0).
+                ++ erewrite IHtokens. reflexivity. assumption.
+                ++ reflexivity.
+              -- inversion Ha.
+            * destruct t eqn:Hdt.
+              -- inversion Ha.
+              -- inversion Ha. reflexivity.
+  Qed.
+
+  Lemma decompress_indep : forall tokens tokens',
+    list_eq token_equiv tokens tokens' -> (decompress tokens) = (decompress tokens').
+  Proof.
+    intros. unfold decompress. eapply decompress'_indep. assumption.
+  Qed.
+
   Definition decompress_from_bits (s: list bool) :=
     decompress (bits_to_tokens s).
 
@@ -60,12 +99,12 @@ Module Impl.
     destruct (skipn len (b :: s)) eqn:Hsk; simpl.
     - destruct (find_largest_prefix_correctness dict (b :: s) index len Hflp Hin) as [_ Hnth].
       apply nth_in_index_lt_length in Hnth.
-      pose proof (num_bytes_for_dict_lower_bound n).
+      pose proof (num_bits_for_dict_lower_bound n).
       lia.
     - split.
       + destruct (find_largest_prefix_correctness dict (b :: s) index len Hflp Hin) as [_ Hnth].
         apply nth_in_index_lt_length in Hnth.
-        pose proof (num_bytes_for_dict_lower_bound n).
+        pose proof (num_bits_for_dict_lower_bound n).
         lia.
       + apply IHfuel.
         * pose proof (length_skipn len (b :: s)) as Hlsk.
@@ -116,17 +155,23 @@ Module Impl.
   Qed.
 
   Theorem compress_correctness: forall s,
-      decompress_from_bytes (compress_to_bytes s) = s.
+      decompress_from_bits (compress_to_bits s) = s.
   Proof.
     intros.
-    unfold compress_to_bytes, decompress_from_bytes.
-    rewrite (tokens_to_bytes_correctness (compress s)).
+    unfold compress_to_bits, decompress_from_bits.
+    pose proof (tokens_to_bits_correctness (compress s)).
+    erewrite decompress_indep. 2: {
+      apply H.
+      eapply compress'_valid_tokens.
+        - lia.
+        - simpl. apply or_introl. reflexivity.
+        - simpl. lia.    
+    }
     - eapply compress_correctness'.
       + lia.
       + unfold empty_dict.
         simpl.
         now left.
-    - apply compress'_valid_tokens; unfold empty_dict; simpl; auto.
   Qed.
 
   Lemma compress'_length_le_fuel: forall fuel dict s,
@@ -151,37 +196,37 @@ Module Impl.
     apply compress'_length_le_fuel.
   Qed.
 
-  Lemma tokens_to_bytes'_length_bound: forall tokens dict_size max_dict_size,
+  Lemma tokens_to_bits'_length_bound: forall tokens dict_size max_dict_size,
       dict_size + length tokens <= max_dict_size ->
-      length (tokens_to_bytes' dict_size tokens)
-        <= length tokens * (num_bytes_for_dict max_dict_size + 1).
+      length (tokens_to_bits' dict_size tokens)
+        <= length tokens * (num_bits_for_dict max_dict_size + 1).
   Proof.
     induction tokens as [|tok rest IH]; intros dict_size max_dict_size Hbound.
     - simpl. lia.
     - assert (Hdict : dict_size <= max_dict_size) by lia.
-      pose proof (num_bytes_for_dict_mono dict_size max_dict_size Hdict) as Hmono.
+      pose proof (num_bits_for_dict_mono dict_size max_dict_size Hdict) as Hmono.
       destruct tok as [index next | index]; simpl in *.
       + rewrite length_app.
-        rewrite length_nat_to_k_bytes. simpl.
+        rewrite length_nat_to_k_bits. simpl.
         assert (Hrec: S dict_size + length rest <= max_dict_size) by lia.
         specialize (IH (S dict_size) max_dict_size Hrec).
         lia.
-      + rewrite length_nat_to_k_bytes.
+      + rewrite length_nat_to_k_bits.
         lia.
   Qed.
 
-  Theorem compress_to_bytes_upperbound: forall s,
-      length (compress_to_bytes s)
-        <= length s * (num_bytes_for_dict (S (length s)) + 1).
+  Theorem compress_to_bits_upperbound: forall s,
+      length (compress_to_bits s)
+        <= length s * (num_bits_for_dict (S (length s)) + 1).
   Proof.
     intros s.
-    unfold compress_to_bytes, tokens_to_bytes.
+    unfold compress_to_bits, tokens_to_bits.
     eapply Nat.le_trans.
     2: {
       apply Nat.mul_le_mono_r.
       apply compress_length_upperbound.
     }
-    apply tokens_to_bytes'_length_bound.
+    apply tokens_to_bits'_length_bound.
     pose proof (compress_length_upperbound s).
     simpl in *.
     now apply Nat.succ_le_mono in H.

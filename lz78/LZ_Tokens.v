@@ -273,7 +273,7 @@ Module Tokens.
     - reflexivity.
   Qed.
   
-  Lemma length_nat_to_k_bytes :
+  Lemma length_nat_to_k_bits :
     forall k n,
       length (nat_to_k_bits k n) = k.
   Proof.

@@ -32,7 +32,7 @@ Module Dict.
     find_largest_prefix' dict s 0 0 0.
 
 
-  Lemma num_bytes_for_dict_lower_bound: forall n,
+  Lemma num_bits_for_dict_lower_bound: forall n,
     n <= 2 ^ (num_bits_for_dict n).
   Proof.
     intros.
