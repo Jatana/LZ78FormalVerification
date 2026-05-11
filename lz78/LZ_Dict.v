@@ -1,23 +1,24 @@
 From Stdlib Require Import Arith Strings.Byte List Lia.
 Import ListNotations.
+Require Import Bool.
 
 Module Dict.
 
-  Definition dict_type := list (list byte).
+  Definition dict_type := list (list bool).
   Definition empty_dict: dict_type := [[]].
 
-  Definition num_bytes_for_dict (dict_size: nat) :=
+  Definition num_bits_for_dict (dict_size: nat) :=
     if dict_size <=? 1 then 1
-    else (Nat.log2 (dict_size - 1) / 8) + 1.
+    else (Nat.log2 (dict_size - 1)) + 1.
 
-  Fixpoint prefix_eq (p s: list byte) :=
+  Fixpoint prefix_eq (p s: list bool) :=
     match p, s with
     | [], _ => true
     | _, [] => false
-    | ph :: pt, sh :: st => if Byte.eqb ph sh then prefix_eq pt st else false
+    | ph :: pt, sh :: st => if eqb ph sh then prefix_eq pt st else false
     end.
 
-  Fixpoint find_largest_prefix' (dict: dict_type) (s: list byte) (index best_index best_len: nat) :=
+  Fixpoint find_largest_prefix' (dict: dict_type) (s: list bool) (index best_index best_len: nat) :=
     match dict with
     | [] => (best_index, best_len)
     | d :: ds =>
@@ -27,15 +28,15 @@ Module Dict.
         else find_largest_prefix' ds s (S index) best_index best_len
     end.
 
-  Definition find_largest_prefix (dict: dict_type) (s: list byte) :=
+  Definition find_largest_prefix (dict: dict_type) (s: list bool) :=
     find_largest_prefix' dict s 0 0 0.
 
 
   Lemma num_bytes_for_dict_lower_bound: forall n,
-    n <= 256 ^ (num_bytes_for_dict n).
+    n <= 2 ^ (num_bits_for_dict n).
   Proof.
     intros.
-    unfold num_bytes_for_dict.
+    unfold num_bits_for_dict.
     destruct (n <=? 1) eqn:?.
     - apply leb_complete in Heqb.
       rewrite Nat.pow_1_r.
@@ -49,20 +50,18 @@ Module Dict.
       etransitivity.
       + exact H2log.
       + assert (Hp: 256 = 2^8) by now cbv.
-        rewrite Hp.
-        rewrite <- Nat.pow_mul_r by lia.
-        apply Nat.pow_le_mono_r. lia.
-        rewrite Nat.mul_add_distr_l.
-        pose proof (Nat.div_mod_eq (Nat.log2 (n - 1)) 8).
-        pose proof (Nat.mod_upper_bound (Nat.log2 (n - 1)) 8 ltac:(lia)).
+
+        assert ((S (Nat.log2 (n - 1))) = ((Nat.log2 (n - 1) + 1))).
+        lia.
+        rewrite H0.
         lia.
   Qed.
 
-  Lemma num_bytes_for_dict_gt_one: forall dict_size,
-    1 <= num_bytes_for_dict dict_size.
+  Lemma num_bits_for_dict_gt_one: forall dict_size,
+    1 <= num_bits_for_dict dict_size.
   Proof.
     intros.
-    unfold num_bytes_for_dict.
+    unfold num_bits_for_dict.
     destruct (dict_size <=? 1); lia.
   Qed.
 
@@ -73,8 +72,8 @@ Module Dict.
     - tauto.
     - destruct s.
       + split; intros; discriminate.
-      + split; intros; destruct (a =? b)%byte eqn:Heqb.
-        * apply byte_dec_bl in Heqb.
+      + split; intros; destruct (eqb a b) eqn:Heqb.
+        * Search (eqb _ _ = true). apply eqb_prop in Heqb.
           f_equal.
           -- auto.
           -- apply IHp. assumption.
@@ -82,7 +81,7 @@ Module Dict.
         * apply IHp.
           injection H as H.
           assumption.
-        * apply eqb_false in Heqb.
+        * Search (eqb _ _ = false). rewrite eqb_false_iff in Heqb.
           injection H as H.
           rewrite H in Heqb.
           contradiction.
@@ -95,16 +94,16 @@ Module Dict.
   Proof.
   Admitted.
 
-  Lemma num_bytes_for_dict_mono : forall a b,
+  Lemma num_bits_for_dict_mono : forall a b,
       a <= b ->
-      num_bytes_for_dict a <= num_bytes_for_dict b.
+      num_bits_for_dict a <= num_bits_for_dict b.
   Proof.
-    intros. unfold num_bytes_for_dict.
+    intros. unfold num_bits_for_dict.
     destruct (a <=? 1) eqn:Ha;
     destruct (b <=? 1) eqn:Hb; try lia.
     2: {
       apply Nat.add_le_mono; try lia.
-      apply Nat.Div0.div_le_mono; try lia.        
+      (* apply Nat.Div0.div_le_mono; try lia.         *)
       apply Nat.log2_le_mono. lia.
     }
     rewrite Nat.leb_nle in Ha. 

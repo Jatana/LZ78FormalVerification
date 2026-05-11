@@ -4,7 +4,7 @@ Import ListNotations.
 
 Module Impl.
 
-  Fixpoint compress' (fuel: nat) (dict: dict_type) (s: list byte) :=
+  Fixpoint compress' (fuel: nat) (dict: dict_type) (s: list bool) :=
     match fuel with
     | 0 => []
     | S fuel =>
@@ -13,28 +13,28 @@ Module Impl.
         | _ =>
             let (index, len) := find_largest_prefix dict s in
             match skipn len s with
-            | [] => [Last index]
+            | [] => [Last index (firstn len s)]
             | next :: rest =>
-                Tok index next :: compress' fuel (dict ++ [firstn len s ++ [next]]) rest
+                Tok index (firstn len s) next :: compress' fuel (dict ++ [firstn len s ++ [next]]) rest
             end
         end
     end.
 
-  Definition compress (s: list byte) :=
+  Definition compress (s: list bool) :=
     compress' (length s) empty_dict s.
 
-  Definition compress_to_bytes (s: list byte) :=
-    tokens_to_bytes (compress s).
+  Definition compress_to_bits (s: list bool) :=
+    tokens_to_bits (compress s).
 
   Fixpoint decompress' (dict: dict_type) (tokens: list Token) :=
     match tokens with
     | [] => []
-    | Tok index next :: rest =>
+    | Tok index _ next :: rest =>
         match nth_error dict index with
         | Some s => s ++ [next] ++ decompress' (dict ++ [s ++ [next]]) rest
         | None => [] (* Should not happen *)
         end
-    | Last index :: rest =>
+    | Last index _ :: rest =>
         match nth_error dict index with
         | Some s => s
         | None => [] (* Should not happen *)
@@ -44,8 +44,8 @@ Module Impl.
   Definition decompress (tokens: list Token) :=
     decompress' empty_dict tokens.
 
-  Definition decompress_from_bytes (s: list byte) :=
-    decompress (bytes_to_tokens s).
+  Definition decompress_from_bits (s: list bool) :=
+    decompress (bits_to_tokens s).
 
 
   Lemma compress'_valid_tokens: forall fuel s dict n,
