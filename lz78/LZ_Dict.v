@@ -36,15 +36,15 @@ Module Dict.
   Proof.
     intros.
     unfold num_bytes_for_dict.
-    destruct (n <=? 1) eqn:?.
+    destruct (n <=? 1) eqn:Heqb.
     - apply leb_complete in Heqb.
       rewrite Nat.pow_1_r.
       lia.
     - apply leb_complete_conv in Heqb.
       pose proof (Nat.log2_spec (n - 1) ltac:(lia)) as [_ H2log].
       apply Nat.lt_sub_lt_add_l in H2log.
-      assert (1 + 2 ^ S (Nat.log2 (n - 1)) = S (2 ^ S (Nat.log2 (n - 1)))) by lia.
-      rewrite H in H2log.
+      assert (Ht: 1 + 2 ^ S (Nat.log2 (n - 1)) = S (2 ^ S (Nat.log2 (n - 1)))) by lia.
+      rewrite Ht in H2log.
       rewrite Nat.lt_succ_r in H2log.
       etransitivity.
       + exact H2log.

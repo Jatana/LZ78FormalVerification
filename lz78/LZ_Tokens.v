@@ -75,7 +75,7 @@ Module Tokens.
   Proof.
     unfold nat_to_byte.
     intros.
-    destruct (of_nat (_ mod 256)) eqn:?.
+    destruct (of_nat (_ mod 256)) eqn:Heqo.
     - apply to_of_nat_iff.
       rewrite (Nat.mod_small n 256 ltac:(lia)) in Heqo.
       assumption.
@@ -123,109 +123,109 @@ Module Tokens.
     tokens_to_bytes' dict_size tokens = bytes ->
     bytes_to_tokens' fuel dict_size bytes = tokens.
   Proof.
-    induction fuel; simpl; intros.
+    induction fuel; simpl; intros * Hlen Hvt Htb.
     - destruct tokens. reflexivity.
-      inversion H.
-      apply length_zero_iff_nil in H3.
+      inversion Hlen.
+      apply length_zero_iff_nil in H0.
       subst.
-      destruct t; simpl in H3.
-      + apply app_eq_nil in H3.
-        destruct H3.
+      destruct t; simpl in H0.
+      + apply app_eq_nil in H0.
+        destruct H0.
         discriminate.
       + pose proof (num_bytes_for_dict_gt_one dict_size).
         destruct (num_bytes_for_dict dict_size).
         * lia.
-        * simpl in H3.
+        * simpl in Hlen.
           discriminate.
-    - destruct bytes.
+    - repeat match goal with
+             | [ |- context[match ?e with _ => _ end] ] => destruct e eqn:?
+             | [ |- context[if ?e then _ else _] ] => destruct e eqn:?
+             end; subst.
       + destruct tokens. reflexivity.
-        destruct t; simpl in H1.
-        * apply app_eq_nil in H1.
-          destruct H1.
+        destruct t; simpl in Htb.
+        * apply app_eq_nil in Htb.
+          destruct Htb.
           discriminate.
         * pose proof (num_bytes_for_dict_gt_one dict_size).
           destruct (num_bytes_for_dict dict_size).
           -- lia.
-          -- simpl in H1.
+          -- simpl in Htb.
              discriminate.
-      + destruct (length (b :: bytes) <? num_bytes_for_dict dict_size) eqn:?.
-        * destruct tokens. reflexivity.
-          simpl in H1.
-          apply Nat.ltb_lt in Heqb0.
-          destruct t.
-          -- pose proof (nat_to_k_bytes_length (num_bytes_for_dict dict_size) index).
-             assert (length (nat_to_k_bytes (num_bytes_for_dict dict_size) index)
-                      <= length (b :: bytes)). {
-               rewrite <- H1, length_app.
-               lia.
-             }
+      + destruct tokens. reflexivity.
+        simpl in Htb.
+        apply Nat.ltb_lt in Heqb0.
+        destruct t.
+        * pose proof (nat_to_k_bytes_length (num_bytes_for_dict dict_size) index).
+          assert (length (nat_to_k_bytes (num_bytes_for_dict dict_size) index)
+                   <= length (b :: l)). {
+            rewrite <- Htb, length_app.
+            lia.
+          }
+          lia.
+        * pose proof (nat_to_k_bytes_length (num_bytes_for_dict dict_size) index) as Hdlen.
+          rewrite Htb in Hdlen.
+          lia.
+      + destruct tokens; simpl in Htb.
+        * discriminate.
+        * destruct t.
+          -- apply Nat.eqb_eq in Heqb1.
+             rewrite <- Htb, length_app, nat_to_k_bytes_length in Heqb1.
+             simpl in Heqb1. lia.
+          -- destruct tokens.
+             ++ rewrite <- Htb, nat_to_k_bytes_correctness.
+                ** reflexivity.
+                ** now simpl in Hlen.
+             ++ simpl in Hlen. now exfalso.
+      + apply Nat.ltb_ge in Heqb0.
+        apply Nat.eqb_neq in Heqb1.
+        apply skipn_all_iff in Heql0.
+        lia.
+      + destruct tokens; simpl in Htb.
+        * discriminate.
+        * destruct t.
+          -- f_equal.
+             ++ pose proof (firstn_skipn (num_bytes_for_dict dict_size) (b :: l)) as Hfsn.
+                rewrite Heql0 in Hfsn.
+                rewrite <- Hfsn in Htb.
+                assert (Hf: firstn (num_bytes_for_dict dict_size) (b :: l)
+                             = nat_to_k_bytes (num_bytes_for_dict dict_size) index). {
+                  pose proof (nat_to_k_bytes_length (num_bytes_for_dict dict_size) index) as Hdlen.
+                  eapply app_l_eq_length in Htb.
+                  - congruence.
+                  - rewrite Hdlen.
+                    reflexivity.
+                  - rewrite length_firstn.
+                    apply Nat.ltb_ge in Heqb0.
+                    apply Nat.eqb_neq in Heqb1.
+                    assert (Hmin: Nat.min (num_bytes_for_dict dict_size) (length (b :: l))
+                                   = num_bytes_for_dict dict_size) by lia.
+                    now rewrite Hmin.
+                }
+                rewrite Hf in Htb |- *.
+                rewrite nat_to_k_bytes_correctness.
+                ** f_equal.
+                   apply app_inv_head in Htb.
+                   congruence.
+                ** simpl in Hvt.
+                   now destruct Hvt.
+             ++ erewrite IHfuel.
+                ** reflexivity.
+                ** pose proof (length_skipn (num_bytes_for_dict dict_size) (b :: l)) as Hls.
+                   rewrite Heql0 in Hls.
+                   simpl in *.
+                   destruct (num_bytes_for_dict dict_size); lia.
+                ** simpl in Hvt.
+                   now destruct Hvt.
+                ** rewrite <- Htb in Heql0.
+                   pose proof (nat_to_k_bytes_length (num_bytes_for_dict dict_size) index) as Hdlen.
+                   rewrite <- Hdlen in Heql0 at 1.
+                   rewrite skipn_app, Nat.sub_diag, skipn_all, skipn_0 in Heql0.
+                   simpl in Heql0.
+                   congruence.
+          -- pose proof (nat_to_k_bytes_length (num_bytes_for_dict dict_size) index) as Hdlen.
+             rewrite Htb in Hdlen.
+             apply Nat.eqb_neq in Heqb1.
              lia.
-          -- pose proof (nat_to_k_bytes_length (num_bytes_for_dict dict_size) index).
-             rewrite H1 in H2.
-             lia.
-        * destruct (length (b :: bytes) =? num_bytes_for_dict dict_size) eqn:?.
-          -- destruct tokens; simpl in H1.
-             ++ discriminate.
-             ++ destruct t.
-                ** apply Nat.eqb_eq in Heqb1.
-                   rewrite <- H1, length_app, nat_to_k_bytes_length in Heqb1.
-                   simpl in Heqb1. lia.
-                ** destruct tokens.
-                   --- rewrite <- H1, nat_to_k_bytes_correctness.
-                       +++ reflexivity.
-                       +++ now simpl in H0.
-                   --- simpl in H0. now exfalso.
-          -- destruct (skipn (num_bytes_for_dict dict_size) (b :: bytes)) eqn:?.
-             ++ apply Nat.ltb_ge in Heqb0.
-                apply Nat.eqb_neq in Heqb1.
-                apply skipn_all_iff in Heql.
-                lia.
-             ++ destruct tokens; simpl in H1.
-                ** discriminate.
-                ** destruct t.
-                   --- f_equal.
-                       +++ pose proof (firstn_skipn (num_bytes_for_dict dict_size) (b :: bytes)).
-                           rewrite Heql in H2.
-                           rewrite <- H2 in H1.
-                           assert (firstn (num_bytes_for_dict dict_size) (b :: bytes)
-                                   = nat_to_k_bytes (num_bytes_for_dict dict_size) index). {
-                             pose proof (nat_to_k_bytes_length (num_bytes_for_dict dict_size) index).
-                             eapply app_l_eq_length in H1.
-                             - congruence.
-                             - rewrite H3.
-                               reflexivity.
-                             - rewrite length_firstn.
-                               apply Nat.ltb_ge in Heqb0.
-                               apply Nat.eqb_neq in Heqb1.
-                               assert (Nat.min (num_bytes_for_dict dict_size) (length (b :: bytes))
-                                       = num_bytes_for_dict dict_size) by lia.
-                               now rewrite H4.
-                           }
-                           rewrite H3 in H1 |- *.
-                           rewrite nat_to_k_bytes_correctness.
-                           *** f_equal.
-                               apply app_inv_head in H1.
-                               congruence.
-                           *** simpl in H0.
-                               now destruct H0.
-                       +++ erewrite IHfuel.
-                           *** reflexivity.
-                           *** pose proof (length_skipn (num_bytes_for_dict dict_size) (b :: bytes)).
-                               rewrite Heql in H2.
-                               simpl in H2, H.
-                               destruct (num_bytes_for_dict dict_size); lia.
-                           *** simpl in H0.
-                               now destruct H0.
-                           *** rewrite <- H1 in Heql.
-                               pose proof (nat_to_k_bytes_length (num_bytes_for_dict dict_size) index).
-                               rewrite <- H2 in Heql at 1.
-                               rewrite skipn_app, Nat.sub_diag, skipn_all, skipn_0 in Heql.
-                               simpl in Heql.
-                               congruence.
-                   --- pose proof (nat_to_k_bytes_length (num_bytes_for_dict dict_size) index).
-                       rewrite H1 in H2.
-                       apply Nat.eqb_neq in Heqb1.
-                       lia.
   Qed.
 
   Lemma tokens_to_bytes_correctness: forall tokens,

@@ -182,9 +182,9 @@ Module Impl.
       apply compress_length_upperbound.
     }
     apply tokens_to_bytes'_length_bound.
-    pose proof (compress_length_upperbound s).
+    pose proof (compress_length_upperbound s) as Hclub.
     simpl in *.
-    now apply Nat.succ_le_mono in H.
+    now apply Nat.succ_le_mono in Hclub.
   Qed. 
 
 End Impl.
