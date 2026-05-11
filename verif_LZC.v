@@ -26,6 +26,9 @@ Definition surely_malloc_spec :=
 Definition bytes_to_vals (bs : list nat) : list val :=
   map Vint (map Int.repr (map Z.of_nat (bs))).
 
+  Definition bytes_to_nat (bs : list byte) : list nat :=
+    (map Byte.to_nat (bs)).
+
   Print Z.
 
 Definition get_nth_spec :=
@@ -54,9 +57,49 @@ Definition encode_length_spec :=
       SEP (mem_mgr gv;
            data_at sh (tarray tuchar 20) ((bytes_to_vals (nat_to_bytes_fixed 0 20 (Z.to_nat len)))) out_).
 
-(* Definition decode_length_spec :=
+(* Definition is_equal_spec :=
+  DECLARE _is_equal
+    WITH sh: share, len: Z, out_: val, out: list val, out_len: Z, s: list val, t: list val, gv: globals
+    PRE [ tptr tuchar, tptr tuchar, tulong ]
+      PROP (writable_share sh; 0 <= len <= Int64.max_unsigned; isptr out_;
+            Zlength (nat_to_bytes (Z.to_nat len)) <= out_len; 0 <= out_len; Zlength initial = 20)
+      PARAMS (s_; t_; Vlong (Int64.repr len)) GLOBALS (gv)
+      SEP (mem_mgr gv; data_at sh (tarray tuchar len) s s_; data_sh (tarray tuchar len) t t_)
+    POST [ tvoid ] 
+      PROP ()
+      RETURN ()
+      SEP (mem_mgr gv;
+           data_at sh (tarray tuchar 20) ((bytes_to_vals (nat_to_bytes_fixed 0 20 (Z.to_nat len)))) out_). *)
+
+Definition is_equal_spec :=
+  DECLARE _is_equal
+    WITH sh1: share, sh2: share, s_ptr: val, t_ptr: val, len: Z, s_vals: list Z, t_vals: list Z
+    PRE [ tptr tuchar, tptr tuchar, tulong ]
+      PROP (
+        readable_share sh1;
+        readable_share sh2;
+        0 <= len <= Int64.max_unsigned;
+        Zlength s_vals = len;
+        Zlength t_vals = len;
+        Forall (fun x => 0 <= x <= 255) s_vals; 
+        Forall (fun x => 0 <= x <= 255) t_vals
+      )
+      PARAMS (s_ptr; t_ptr; Vlong (Int64.repr len))
+      SEP (
+        data_at sh1 (tarray tuchar len) (map Vint (map Int.repr s_vals)) s_ptr;
+        data_at sh2 (tarray tuchar len) (map Vint (map Int.repr t_vals)) t_ptr
+      )
+    POST [ tint ]
+      PROP ()
+      RETURN (Vint (Int.repr (if list_eqb Z.eqb s_vals t_vals then 1 else 0))) 
+      SEP (
+        data_at sh1 (tarray tuchar len) (map Vint (map Int.repr s_vals)) s_ptr;
+        data_at sh2 (tarray tuchar len) (map Vint (map Int.repr t_vals)) t_ptr
+      ).
+(* 
+Definition decode_length_spec :=
   DECLARE _decode_length
-    WITH sh_in: share, in_: val, in_bytes: list byte, in_len: Z,
+    WITH sh_in: share, in_: val, in_bytes: list nat, in_len: Z,
          sh_out: share, out_: val, gv: globals
     PRE [ tptr tuchar, tulong, tptr tulong ]
       PROP (readable_share sh_in; writable_share sh_out;
@@ -64,7 +107,7 @@ Definition encode_length_spec :=
             in_len = Zlength in_bytes)
       PARAMS (in_; Vlong (Int64.repr in_len); out_) GLOBALS (gv)
       SEP (mem_mgr gv;
-           data_at sh_in (tarray tuchar in_len) (bytes_to_vals in_bytes) in_;
+           data_at sh_in (tarray tuchar in_len) (map Byte.of_nat in_bytes) in_;
            data_at sh_out tulong (Vlong Int64.zero) out_)
     POST [ tulong ] EX idx: Z,
       PROP (idx = Zlength (nat_to_bytes (fst (bytes_to_nat in_bytes))); 0 <= idx <= in_len)
@@ -106,9 +149,10 @@ Definition encode_length_spec :=
 Definition compress_out_size (in_len : Z) : Z :=
   (9 * in_len + 7) / 8 + 65.
 
-(* Definition compress_spec :=
+(* 
+Definition compress_spec :=
   DECLARE _compress
-    WITH sh: share, in_: val, in_bytes: list byte, in_len: Z, gv: globals
+    WITH sh: share, in_: val, in_bytes: list nat, in_len: Z, gv: globals
     PRE [ tptr tuchar, tulong ]
       PROP (readable_share sh;
             0 <= in_len <= Int64.max_unsigned;
@@ -116,7 +160,7 @@ Definition compress_out_size (in_len : Z) : Z :=
       PARAMS (in_; Vlong (Int64.repr in_len)) GLOBALS (gv)
       SEP (mem_mgr gv; data_at sh (tarray tuchar in_len) (bytes_to_vals in_bytes) in_)
     POST [ tptr tuchar ] EX p: val,
-      let out_bytes := compress_to_bytes in_bytes in
+      let out_bytes := compress_to_bytes (bytes_to_vals in_bytes) in
       PROP (Zlength out_bytes <= compress_out_size in_len)
       RETURN (p)
       SEP (mem_mgr gv;
@@ -141,14 +185,14 @@ Definition compress_out_size (in_len : Z) : Z :=
       SEP (mem_mgr gv;
            data_at sh (tarray tuchar in_len) (bytes_to_vals in_bytes) in_;
            malloc_token Ews (tarray tuchar (Zlength out_bytes)) p *
-           data_at Ews (tarray tuchar (Zlength out_bytes)) (bytes_to_vals out_bytes) p). *)
-
+           data_at Ews (tarray tuchar (Zlength out_bytes)) (bytes_to_vals out_bytes) p).
+ *)
 
 Definition Gprog: funspecs :=
         ltac:(with_library prog [surely_malloc_spec;
                                  get_nth_spec;
-                                 encode_length_spec
-                                 (* decode_length_spec; *)
+                                 encode_length_spec;
+                                 is_equal_spec
                                  (* find_largest_match_spec *)
                                  ]).
 
@@ -467,7 +511,317 @@ Zlength
   - entailer!. hint. list_solve. 
 Qed.
 
-Lemma decode_length_body:
+Lemma pos_eqb_refl : forall p : positive, (p =? p)%positive = true.
+Proof.
+  induction p.
+  
+  - simpl. 
+    exact IHp.
+    
+  - simpl. 
+    exact IHp.
+    
+  - simpl. 
+    reflexivity.
+Qed.
+
+Lemma is_equal_body:
+  semax_body Vprog Gprog f_is_equal is_equal_spec.
+Proof.
+  start_function.
+  forward_if.
+    - forward. entailer!. f_equal. f_equal.
+  assert (H_len_s : Zlength s_vals = 0).
+  inversion H4.
+  Search (Int64.Z_mod_modulus _ = _).  
+  rewrite Int64.Z_mod_modulus_eq.
+  symmetry.
+  apply Z.mod_small.
+  rep_lia.
+
+  destruct s_vals as [| s s_vals'].
+  2: { 
+    list_solve.
+  }
+
+  assert (H_len_t : Zlength t_vals = 0) by lia.
+
+  destruct t_vals as [| t t_vals'].
+  2: { 
+    list_solve. 
+  }
+
+  simpl. 
+  reflexivity.
+
+  - assert (Int.min_signed <= 0 <= Int.max_signed).
+    unfold Int.min_signed. unfold Int.max_signed. unfold Int.half_modulus. unfold Int.modulus. 
+    change (two_power_nat Int.wordsize) with (4294967296).
+    change (4294967296 / 2) with (2147483648).
+    lia.
+    assert (0 <= 0 < Zlength (map Int.repr s_vals)).
+    split. lia.
+    rewrite Zlength_map.
+
+    rewrite H0.
+
+    assert (H_len_not_zero : len <> 0).
+    {
+      intro H_zero.
+      subst len. 
+      apply H4. 
+      rewrite H_zero.
+      reflexivity.
+    }
+
+    lia.
+    assert (0 <= 0 < Zlength s_vals).
+    split. lia.
+
+    rewrite H0.
+
+    assert (H_len_not_zero : len <> 0).
+    {
+      intro H_zero.
+      subst len. 
+      apply H4. 
+      rewrite H_zero.
+      reflexivity.
+    }
+
+    lia.
+
+    forward.
+      -- entailer!. 
+        rewrite Forall_Znth in H2.
+        pose proof (H2 0 H7) as H_s0_bounds.
+        rewrite Int.unsigned_repr.
+        2: {
+          rep_lia.
+        }
+        change Byte.max_unsigned with 255.
+        rep_lia.
+      -- forward.
+          --- entailer!.  
+              assert (H_t_len : 0 <= 0 < Zlength t_vals) by lia.
+              rewrite Forall_Znth in H3.
+              pose proof (H3 0 H_t_len) as H_t0_bounds.
+
+              rewrite Int.unsigned_repr.
+              2: {
+                rep_lia.
+              }
+
+              change Byte.max_unsigned with 255.
+              rep_lia.
+
+          --- forward_if. 
+            ---- forward. entailer!.
+                 f_equal. f_equal.
+                destruct s_vals as [| s s_vals'].
+                { list_solve. }
+                destruct t_vals as [| t t_vals'].
+                { list_solve. }
+
+                change (Znth 0 (s :: s_vals')) with s in H8.
+                change (Znth 0 (t :: t_vals')) with t in H8.
+
+                assert (H_neq : s <> t).
+                {
+                  intro H_eq.
+                  subst t.
+                  apply H8.
+                  reflexivity.
+                }
+
+                simpl list_eqb. 
+                
+                destruct (Zeq_bool s t) eqn:H_bool.
+                ----- apply Zeq_bool_eq in H_bool.
+                  contradiction.
+                ----- simpl.
+                      reflexivity.
+            ---- assert (H_len_pos : 1 <= len) by lia.
+
+                rewrite (split2_data_at_Tarray_tuchar sh1 len 1 (map Vint (map Int.repr s_vals)) s_ptr).
+                2: lia.
+                2: { rewrite !Zlength_map; lia. }
+
+                rewrite (split2_data_at_Tarray_tuchar sh2 len 1 (map Vint (map Int.repr t_vals)) t_ptr).
+                2: lia.
+                2: { rewrite !Zlength_map; lia. }
+
+                rewrite !sublist_map.
+
+                forward_call (sh1, sh2, offset_val 1 s_ptr, offset_val 1 t_ptr, len - 1, sublist 1 len s_vals, sublist 1 len t_vals).
+                  * entailer!.
+                  * entailer!. hint. autorewrite with sublist in *|-.
+                    assert_PROP (field_address0 (Tarray tuchar (Zlength s_vals) noattr) (SUB 1) s_ptr = offset_val 1 s_ptr) as Hs_ptr.
+                    { entailer!. 
+                      unfold field_address0.
+                    
+                      if_tac.
+                      
+                      - simpl. 
+                        reflexivity.
+                        
+                      - auto with field_compatible. hint.
+                        exfalso.
+
+                        unfold field_address0 in H12.
+
+                        destruct (field_compatible0_dec (Tarray tuchar (Zlength s_vals) noattr) (SUB 1) s_ptr).
+                        
+                        + contradiction.
+                          
+                        + destruct H12 as [H_isptr _].
+                          inversion H_isptr.
+                    }
+
+                    assert_PROP (field_address0 (Tarray tuchar (Zlength s_vals) noattr) (SUB 1) t_ptr = offset_val 1 t_ptr) as Ht_ptr.
+                    { entailer!. auto with field_compatible.
+                      unfold field_address0.
+                      
+                      if_tac.
+                      
+                      - simpl. 
+                        reflexivity.
+                        
+                      - exfalso. 
+                      
+                        unfold field_address0 in H18.
+                        
+                        destruct (field_compatible0_dec (Tarray tuchar (Zlength s_vals) noattr) (SUB 1) t_ptr).
+                        
+                        + contradiction.
+                          
+                        + destruct H18 as [H_isptr _].
+                          inversion H_isptr.
+                    }
+
+                    rewrite Hs_ptr, Ht_ptr.
+
+
+                    cancel.
+
+                  * repeat split.
+
+                + rewrite Zlength_sublist; lia.
+
+                + rewrite Zlength_sublist; lia.
+
+                + apply Forall_sublist.
+                  apply H2.
+
+                + apply Forall_sublist.
+                  apply H3.
+                *  forward. entailer!.
+                  ++ f_equal. f_equal. 
+
+  destruct s_vals as [| s s_vals']; [list_solve|].
+  destruct t_vals as [| t t_vals']; [list_solve|].
+
+  change (Znth 0 (s :: s_vals')) with s in H8.
+  change (Znth 0 (t :: t_vals')) with t in H8.
+
+  assert (H_s_eq_t : s = t).
+  {
+    inversion H2; subst.
+    inversion H3; subst.
+    
+    apply (f_equal Int.unsigned) in H8.
+    rewrite !Int.unsigned_repr in H8 by rep_lia.
+    exact H8.
+  }
+  
+  subst t. 
+
+  autorewrite with sublist.
+
+  simpl list_eqb.
+
+  assert (H_true : Zeq_bool s s = true).
+  { 
+    unfold Zeq_bool. 
+    destruct (Z.eq_dec s s).
+    - destruct s. reflexivity. Search (_ =? _). rewrite pos_eqb_refl. reflexivity. apply pos_eqb_refl.
+    - contradiction.
+  }
+  rewrite H_true.
+  
+  simpl.
+  autorewrite with sublist.
+  Search (sublist 1 _ _ = _). rewrite sublist_1_cons.
+  simpl.
+  assert (Z.succ (Zlength s_vals') - 1 = (Zlength s_vals')).
+  lia. rewrite H0. rewrite sublist_1_cons. 
+  rewrite H0.
+  autorewrite with sublist.
+  autorewrite with sublist.
+  assert (Zlength s_vals' = Zlength t_vals').
+  rewrite !Zlength_cons in H1.
+  
+  lia.
+  rewrite H23.
+  autorewrite with sublist.
+  reflexivity.
+
+  ++ entailer!.   
+
+  rewrite <- !sublist_map.
+
+  assert_PROP (offset_val 1 s_ptr = field_address0 (Tarray tuchar (Zlength s_vals) noattr) (SUB 1) s_ptr) as Hs_ptr.
+  { entailer!. 
+  unfold field_address0.
+  
+  if_tac.
+  
+  - simpl. 
+    reflexivity.
+    
+  - auto with field_compatible.
+    exfalso.
+  
+  apply H30.
+  
+  
+  auto with field_compatible.
+  
+  unfold field_compatible0.
+  unfold field_compatible in H11, H17.
+  
+  
+  destruct H17 as [H_isptr [H_cosu [H_size1 [H_align _]]]].
+  destruct H11 as [_ [_ [H_size2 _]]].
+  
+  split. { exact H_isptr. }
+  split. { exact H_cosu. }
+  split. 
+  { 
+    destruct s_ptr; try contradiction.
+    unfold size_compatible in *. simpl in *.
+    unfold Ptrofs.add in H_size2.
+    
+    rewrite Ptrofs.unsigned_repr in H_size2 by admit.
+    
+    admit.
+  }
+  split.
+  {
+    unfold align_compatible in *. auto.
+    
+    destruct s_ptr as [| | | | | b i_ofs]; try contradiction.
+  
+
+  simpl in H_align |- *.
+
+  simpl.
+
+  simpl in H_align.
+  Search align_compatible_rec.
+Admitted.
+                  
+(* Lemma decode_length_body:
   semax_body Vprog Gprog f_decode_length decode_length_spec.
 Proof.
   start_function.
@@ -519,4 +873,4 @@ Proof.
   forward.
   (* forward_call ??? *)
 Admitted.
-
+ *)
