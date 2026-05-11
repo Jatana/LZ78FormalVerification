@@ -20,16 +20,30 @@ Module Impl.
         end
     end.
 
-  Definition agreement (dict: dict_type) (tokens : list Token) (index : nat) (phr : list bool) (next : bool) :=
-    forall t : Token, In t tokens -> t = Tok index phr next -> In (phr ++ [next]) dict.
+  Definition agreement (dict: dict_type) (tokens : list Token)  :=
+    forall (index : nat) (phr : list bool) (next : bool), In (Tok index phr next) tokens -> In (phr ++ [next]) dict.
 
-  (* Lemma compress_cor1 (fuel : nat) (dict : dict_type) (s : list bool):
-    compress' fuel dict s [tokens] = tokens' -> s = concatentation of phrase(t) ++ next(t) where t over tokens'.
+  Definition get_phrase (t : Token) := 
+    match t with
+    | Tok ind phr next => phr ++ [next]
+    | Last ind phr => phr
+  end.
 
-  Lemma compress_cor2 :
-    agreement dict tokens -> compress' fuel dict s tokens = tokens' ->
-      forall t, In t tokens -> forall t', In t' tokens' -> phrase(t) <> phrase(t') or next(t) <> next(t'). *)
+  Definition phrases_differ (tokens tokens' : list Token)  := 
+    forall i j t1 t2, i < length tokens -> j < length tokens' 
+    -> nth_error tokens i = Some t1 -> nth_error tokens' j = Some t2
+    -> get_phrase(t1) <> get_phrase(t2).
 
+  Lemma compress'_cor1 (fuel : nat) (dict : dict_type) (s : list bool) (tokens : list Token):
+    compress' fuel dict s = tokens -> s = concat (map get_phrase tokens).
+
+  Lemma compress'_cor2 (fuel : nat) (dict : dict_type) (s : list bool) (tokens prev_tokens : list Token) (i j : nat) (t1 t2 : Token):
+    (agreement dict prev_tokens)
+    -> compress' fuel dict s = tokens
+    -> (phrases_differ prev_tokens tokens) /\ (phrases_differ tokens tokens).
+
+  Lemma comb (tokens : list Token) :
+    (phrases_differ tokens tokens) -> length (concat (map get_phrase tokens)) >= (length tokens) * (Nat.log2 (length tokens) - 3).
 
   Definition compress (s: list bool) :=
     compress' (length s) empty_dict s.
