@@ -4,6 +4,7 @@ ROCQC=rocq compile
 CC=clightgen -normalize
 
 rocq:
+	$(ROCQC) Utils.v
 	$(ROCQC) LZ_Dict.v
 	$(ROCQC) LZ_Tokens.v
 	$(ROCQC) LZ.v

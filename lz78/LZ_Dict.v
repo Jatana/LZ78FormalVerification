@@ -30,6 +30,34 @@ Module Dict.
   Definition find_largest_prefix (dict: dict_type) (s: list byte) :=
     find_largest_prefix' dict s 0 0 0.
 
+
+  Lemma num_bytes_for_dict_lower_bound: forall n,
+    n <= 256 ^ (num_bytes_for_dict n).
+  Proof.
+    intros.
+    unfold num_bytes_for_dict.
+    destruct (n <=? 1) eqn:?.
+    - apply leb_complete in Heqb.
+      rewrite Nat.pow_1_r.
+      lia.
+    - apply leb_complete_conv in Heqb.
+      pose proof (Nat.log2_spec (n - 1) ltac:(lia)) as [_ H2log].
+      apply Nat.lt_sub_lt_add_l in H2log.
+      assert (1 + 2 ^ S (Nat.log2 (n - 1)) = S (2 ^ S (Nat.log2 (n - 1)))) by lia.
+      rewrite H in H2log.
+      rewrite Nat.lt_succ_r in H2log.
+      etransitivity.
+      + exact H2log.
+      + assert (Hp: 256 = 2^8) by now cbv.
+        rewrite Hp.
+        rewrite <- Nat.pow_mul_r by lia.
+        apply Nat.pow_le_mono_r. lia.
+        rewrite Nat.mul_add_distr_l.
+        pose proof (Nat.div_mod_eq (Nat.log2 (n - 1)) 8).
+        pose proof (Nat.mod_upper_bound (Nat.log2 (n - 1)) 8 ltac:(lia)).
+        lia.
+  Qed.
+
   Lemma num_bytes_for_dict_gt_one: forall dict_size,
     1 <= num_bytes_for_dict dict_size.
   Proof.

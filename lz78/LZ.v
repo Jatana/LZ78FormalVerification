@@ -1,5 +1,5 @@
 From Stdlib Require Import Arith Strings.Byte List Lia.
-Require Import LZ_Dict LZ_Tokens.
+Require Import Utils LZ_Dict LZ_Tokens.
 Import ListNotations.
 
 Module Impl.
@@ -48,11 +48,36 @@ Module Impl.
     decompress (bytes_to_tokens s).
 
 
-  Lemma compress'_valid_tokens: forall fuel s dict,
+  Lemma compress'_valid_tokens: forall fuel s dict n,
     length s <= fuel ->
-    valid_tokens (compress' fuel dict s) (length dict).
+    In [] dict ->
+    length dict <= n ->
+    valid_tokens (compress' fuel dict s) n.
   Proof.
-  Admitted.
+    induction fuel; intros * Hlen Hin Hd; simpl in *; try constructor.
+    destruct s; try constructor.
+    destruct (find_largest_prefix dict (b :: s)) as [index len] eqn:Hflp.
+    destruct (skipn len (b :: s)) eqn:Hsk; simpl.
+    - destruct (find_largest_prefix_correctness dict (b :: s) index len Hflp Hin) as [_ Hnth].
+      apply nth_in_index_lt_length in Hnth.
+      pose proof (num_bytes_for_dict_lower_bound n).
+      lia.
+    - split.
+      + destruct (find_largest_prefix_correctness dict (b :: s) index len Hflp Hin) as [_ Hnth].
+        apply nth_in_index_lt_length in Hnth.
+        pose proof (num_bytes_for_dict_lower_bound n).
+        lia.
+      + apply IHfuel.
+        * pose proof (length_skipn len (b :: s)) as Hlsk.
+          rewrite Hsk in Hlsk.
+          simpl in Hlen, Hlsk.
+          destruct len; lia.
+        * apply in_or_app.
+          now left.
+        * rewrite length_app.
+          simpl.
+          lia.
+  Qed.
 
   Lemma compress_correctness': forall fuel dict s,
     length s <= fuel ->
@@ -101,8 +126,7 @@ Module Impl.
       + unfold empty_dict.
         simpl.
         now left.
-    - apply compress'_valid_tokens.
-      lia.
+    - apply compress'_valid_tokens; unfold empty_dict; simpl; auto.
   Qed.
 
   Lemma compress'_length_le_fuel: forall fuel dict s,
