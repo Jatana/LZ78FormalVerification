@@ -1,6 +1,5 @@
-From Stdlib Require Import Arith Strings.Byte List Lia.
+From Stdlib Require Import Arith List Lia Bool.
 Import ListNotations.
-Require Import Bool.
 
 Module Dict.
 
@@ -73,7 +72,7 @@ Module Dict.
     - destruct s.
       + split; intros; discriminate.
       + split; intros; destruct (eqb a b) eqn:Heqb.
-        * Search (eqb _ _ = true). apply eqb_prop in Heqb.
+        * apply eqb_prop in Heqb.
           f_equal.
           -- auto.
           -- apply IHp. assumption.
@@ -81,7 +80,7 @@ Module Dict.
         * apply IHp.
           injection H as H.
           assumption.
-        * Search (eqb _ _ = false). rewrite eqb_false_iff in Heqb.
+        * rewrite eqb_false_iff in Heqb.
           injection H as H.
           rewrite H in Heqb.
           contradiction.
@@ -103,7 +102,6 @@ Module Dict.
     destruct (b <=? 1) eqn:Hb; try lia.
     2: {
       apply Nat.add_le_mono; try lia.
-      (* apply Nat.Div0.div_le_mono; try lia.         *)
       apply Nat.log2_le_mono. lia.
     }
     rewrite Nat.leb_nle in Ha. 

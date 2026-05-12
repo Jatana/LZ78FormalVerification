@@ -20,30 +20,22 @@ Module Impl.
         end
     end.
 
-  Definition agreement (dict: dict_type) (tokens : list Token)  :=
-    forall (index : nat) (phr : list bool) (next : bool), In (Tok index phr next) tokens -> In (phr ++ [next]) dict.
+  Definition agreement (dict: dict_type) (tokens: list Token) :=
+    forall index phr next,
+      In (Tok index phr next) tokens ->
+      In (phr ++ [next]) dict.
 
-  Definition get_phrase (t : Token) := 
+  Definition get_phrase (t: Token) := 
     match t with
-    | Tok ind phr next => phr ++ [next]
-    | Last ind phr => phr
-  end.
+    | Tok _ phrase next => phrase ++ [next]
+    | Last _ phrase => phrase
+    end.
 
-  Definition phrases_differ (tokens tokens' : list Token)  := 
-    forall i j t1 t2, i < length tokens -> j < length tokens' 
-    -> nth_error tokens i = Some t1 -> nth_error tokens' j = Some t2
-    -> get_phrase(t1) <> get_phrase(t2).
-
-  Lemma compress'_cor1 (fuel : nat) (dict : dict_type) (s : list bool) (tokens : list Token):
-    compress' fuel dict s = tokens -> s = concat (map get_phrase tokens).
-
-  Lemma compress'_cor2 (fuel : nat) (dict : dict_type) (s : list bool) (tokens prev_tokens : list Token) (i j : nat) (t1 t2 : Token):
-    (agreement dict prev_tokens)
-    -> compress' fuel dict s = tokens
-    -> (phrases_differ prev_tokens tokens) /\ (phrases_differ tokens tokens).
-
-  Lemma comb (tokens : list Token) :
-    (phrases_differ tokens tokens) -> length (concat (map get_phrase tokens)) >= (length tokens) * (Nat.log2 (length tokens) - 3).
+  Definition phrases_differ (tokens tokens': list Token) := 
+    forall i j t1 t2,
+      nth_error tokens i = Some t1 ->
+      nth_error tokens' j = Some t2 ->
+      get_phrase t1 <> get_phrase t2.
 
   Definition compress (s: list bool) :=
     compress' (length s) empty_dict s.
@@ -245,5 +237,30 @@ Module Impl.
     simpl in *.
     now apply Nat.succ_le_mono in H.
   Qed. 
+
+  Lemma compress'_eq_concat_phrases: forall fuel dict s tokens,
+    length s <= fuel ->
+    compress' fuel dict s = tokens ->
+    s = concat (map get_phrase tokens).
+  Proof. Admitted.
+
+  Lemma compress'_agreement: forall fuel dict s tokens,
+    length s <= fuel ->
+    compress' fuel dict s = tokens ->
+    agreement dict tokens.
+  Proof. Admitted.
+
+  Lemma compress'_cor2 (fuel: nat) (dict: dict_type) (s: list bool)
+                       (tokens prev_tokens: list Token) (i j: nat) (t1 t2: Token):
+    length s <= fuel ->
+    compress' fuel dict s = tokens ->
+    agreement dict prev_tokens ->
+    phrases_differ prev_tokens tokens /\ phrases_differ tokens tokens.
+  Proof. Admitted.
+
+  Lemma comb (tokens: list Token) :
+    (phrases_differ tokens tokens) ->
+    length (concat (map get_phrase tokens)) >= (length tokens) * (Nat.log2 (length tokens) - 3).
+  Proof. Admitted.
 
 End Impl.

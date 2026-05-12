@@ -1,8 +1,7 @@
-From Stdlib Require Import Arith Strings.Byte List Lia.
+From Stdlib Require Import Arith Strings.Byte List Lia BinPos.
 Require Import Utils.
 Require Import LZ_Dict.
 Import ListNotations.
-Require Import BinPos.
 
 Module Tokens.
 
@@ -18,8 +17,6 @@ Module Tokens.
     | [Last index _] => index < 2 ^ (num_bits_for_dict dict_size) 
     | [] => True
     end.
-
-  (* Search (Pos.to_nat _). *)
 
   Fixpoint nat_to_k_bits (k n : nat) : list bool :=
     match k with
@@ -39,24 +36,6 @@ Module Tokens.
     | b :: rest => to_nat b + 2 * k_bits_to_nat rest
     end.
       
-  (* Definition nat_to_byte (n: nat): byte :=
-    match of_nat (n mod 256) with
-    | Some b => b
-    | None => x00 (* Never happens *)
-    end. *)
-
-  (* Fixpoint nat_to_k_bytes (k n: nat) :=
-    match k with
-    | 0 => []
-    | S k => nat_to_byte (n mod 256) :: nat_to_k_bytes k (n / 256)
-    end. *)
-
-  (* Fixpoint k_bytes_to_nat (bytes: list byte) :=
-    match bytes with
-    | [] => 0
-    | b :: rest => to_nat b + 256 * k_bytes_to_nat rest
-    end. *)
-
   Fixpoint tokens_to_bits' (dict_size: nat) (tokens: list Token) :=
     match tokens with
     | [] => []
@@ -94,7 +73,9 @@ Module Tokens.
     n < 2 ->
     to_nat (if n =? 0 then false else true) = n.
   Proof.
-    intros. destruct n. simpl. reflexivity. destruct n. simpl. reflexivity. lia.
+    intros.
+    do 2 (destruct n; try reflexivity).
+    lia.
   Qed.
 
   Arguments Nat.modulo : simpl never.
@@ -143,8 +124,6 @@ Module Tokens.
     | (nil, nil) => True
     | _ => False
     end.
-  
-  Print token_equiv.
 
   Lemma tokens_to_bits_correctness': forall fuel tokens dict_size bits,
     length bits <= fuel ->
@@ -232,35 +211,28 @@ Module Tokens.
                            }
                            rewrite H3 in H1 |- *.
                            rewrite nat_to_k_bits_correctness.
-                           *** f_equal.
+                           *** f_equal. 
                                apply app_inv_head in H1.
-                               
                                simpl. split. 
                                 ---- unfold token_equiv. split.
                                   **** reflexivity.
                                   **** congruence.
-                                ---- simpl. admit. 
+                                ---- simpl.
+                                     apply IHfuel.
+                                     ++++ pose proof (length_skipn (num_bits_for_dict dict_size) (b :: bits)).
+                                          rewrite Heql in H4.
+                                          simpl in H4, H.
+                                          destruct (num_bits_for_dict dict_size); lia.
+                                     ++++ simpl in H0.
+                                          now destruct H0.
+                                     ++++ congruence.
                            *** simpl in H0.
                                now destruct H0.
-                       (* +++ erewrite IHfuel.
-                           *** reflexivity.
-                           *** pose proof (length_skipn (num_bytes_for_dict dict_size) (b :: bytes)).
-                               rewrite Heql in H2.
-                               simpl in H2, H.
-                               destruct (num_bytes_for_dict dict_size); lia.
-                           *** simpl in H0.
-                               now destruct H0.
-                           *** rewrite <- H1 in Heql.
-                               pose proof (nat_to_k_bytes_length (num_bytes_for_dict dict_size) index).
-                               rewrite <- H2 in Heql at 1.
-                               rewrite skipn_app, Nat.sub_diag, skipn_all, skipn_0 in Heql.
-                               simpl in Heql.
-                               congruence. *)
                    --- pose proof (nat_to_k_bits_length (num_bits_for_dict dict_size) index).
                        rewrite H1 in H2.
                        apply Nat.eqb_neq in Heqb1.
                        lia.
-  Admitted.
+  Qed.
 
   Lemma tokens_to_bits_correctness: forall tokens,
     valid_tokens tokens 1 ->
