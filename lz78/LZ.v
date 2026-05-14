@@ -50,20 +50,20 @@ Module Impl.
 
   Lemma compress'_valid_tokens: forall fuel s dict n,
     length s <= fuel ->
-    In [] dict ->
+    nth_error dict 0 = Some [] ->
     length dict <= n ->
     valid_tokens (compress' fuel dict s) n.
   Proof.
-    induction fuel; intros * Hlen Hin Hd; simpl in *; try constructor.
+    induction fuel; intros * Hlen Hfst Hd; simpl in *; try constructor.
     destruct s; try constructor.
     destruct (find_largest_prefix dict (b :: s)) as [index len] eqn:Hflp.
     destruct (skipn len (b :: s)) eqn:Hsk; simpl.
-    - destruct (find_largest_prefix_correctness dict (b :: s) index len Hflp Hin) as [_ Hnth].
+    - destruct (find_largest_prefix_correctness dict (b :: s) index len Hflp Hfst) as [_ Hnth].
       apply nth_in_index_lt_length in Hnth.
       pose proof (num_bytes_for_dict_lower_bound n).
       lia.
     - split.
-      + destruct (find_largest_prefix_correctness dict (b :: s) index len Hflp Hin) as [_ Hnth].
+      + destruct (find_largest_prefix_correctness dict (b :: s) index len Hflp Hfst) as [_ Hnth].
         apply nth_in_index_lt_length in Hnth.
         pose proof (num_bytes_for_dict_lower_bound n).
         lia.
@@ -72,8 +72,14 @@ Module Impl.
           rewrite Hsk in Hlsk.
           simpl in Hlen, Hlsk.
           destruct len; lia.
-        * apply in_or_app.
-          now left.
+        * destruct (dict ++ [firstn len (b :: s) ++ [b0]]) eqn:?.
+          -- apply app_eq_nil in Heql0.
+             destruct Heql0 as [_ Hw].
+             discriminate.
+          -- destruct dict eqn:?.
+             ++ discriminate.
+             ++ rewrite <- app_comm_cons in Heql0.
+                congruence.
         * rewrite length_app.
           simpl.
           lia.
@@ -81,15 +87,15 @@ Module Impl.
 
   Lemma compress_correctness': forall fuel dict s,
     length s <= fuel ->
-    In [] dict ->
+    nth_error dict 0 = Some [] ->
     decompress' dict (compress' fuel dict s) = s.
   Proof.
-    induction fuel; simpl; intros dict s Hlen Hin.
+    induction fuel; simpl; intros dict s Hlen Hfst.
     - inversion Hlen.
       now apply length_zero_iff_nil in H0.
     - destruct s; try reflexivity.
       destruct (find_largest_prefix dict (b :: s)) as [index len] eqn:?.
-      pose proof (find_largest_prefix_correctness dict (b :: s) index len Heqp Hin) as [_ Hs].
+      pose proof (find_largest_prefix_correctness dict (b :: s) index len Heqp Hfst) as [_ Hs].
       pose proof (firstn_skipn len (b :: s)) as Hfs.
       destruct (skipn len (b :: s)) eqn:?; simpl.
       + rewrite app_nil_r in Hfs.
@@ -97,22 +103,18 @@ Module Impl.
         now rewrite Hs.
       + rewrite <- Hfs, Hs, app_inv_head_iff.
         f_equal.
-        assert (Hlf: length l <= fuel). {
-          rewrite <- Hfs, length_app, length_cons in Hlen.
-          lia.
-        }
-        assert (Hinapp: In [] (dict ++ [firstn len (b :: s) ++ [b0]])). {
-          apply in_or_app.
-          now left.
-        }
-        specialize (IHfuel (dict ++ [firstn len (b :: s) ++ [b0]]) l Hlf Hinapp).
-        assert (Hd: dict ++ [firstn len (firstn len (b :: s) ++ b0 :: l) ++ [b0]] = 
-                dict ++ [firstn len (b :: s) ++ [b0]]). {
+        destruct dict; try discriminate.
+        assert (Hd: (l0 :: dict) ++ [firstn len (firstn len (b :: s) ++ b0 :: l) ++ [b0]] = 
+                (l0 :: dict) ++ [firstn len (b :: s) ++ [b0]]). {
          rewrite app_inv_head_iff.
          f_equal.
          now rewrite app_inv_tail_iff, Hfs.
         }
-        now rewrite Hd.
+        rewrite Hd.
+        eapply IHfuel.
+        * rewrite <- Hfs, length_app, length_cons in Hlen.
+          lia.
+        * assumption.
   Qed.
 
   Theorem compress_correctness: forall s,
@@ -124,8 +126,7 @@ Module Impl.
     - eapply compress_correctness'.
       + lia.
       + unfold empty_dict.
-        simpl.
-        now left.
+        reflexivity.
     - apply compress'_valid_tokens; unfold empty_dict; simpl; auto.
   Qed.
 
