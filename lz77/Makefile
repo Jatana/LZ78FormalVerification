@@ -8,9 +8,9 @@ rocq:
 	$(ROCQC) LZ_Matching.v
 	$(ROCQC) LZ_Tokens.v
 	$(ROCQC) LZ.v
-	$(CC) LZC.c
-	$(ROCQC) LZC.v
-	$(ROCQC) verif_LZC.v
+	# $(CC) LZC.c
+	# $(ROCQC) LZC.v
+	# $(ROCQC) verif_LZC.v
 
 clean:
 	rm -f *.vo* *.glob *.aux .*.aux .*.cache

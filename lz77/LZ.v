@@ -28,6 +28,14 @@ Module Impl.
   Definition decompress (l : list Token) : list byte :=
     decompress' [] l.
 
+  Definition compress_to_bytes s :=
+    nat_to_bytes (length s) ++ (tokens_to_bytes (compress s)).
+
+  Definition decompress_from_bytes s :=
+    let (len, compressed) := bytes_to_nat s in 
+    decompress (bytes_to_tokens compressed).
+
+
   Lemma compress_valid: forall after before l,
     Forall valid_token (compress' before after l).
   Proof.
@@ -172,13 +180,6 @@ Module Impl.
     rewrite app_nil_l in H.
     exact H.
   Qed.
-
-  Definition compress_to_bytes s :=
-    nat_to_bytes (length s) ++ (tokens_to_bytes (compress s)).
-
-  Definition decompress_from_bytes s :=
-    let (len, compressed) := bytes_to_nat s in 
-    decompress (bytes_to_tokens compressed).
 
   Theorem correctness_full: forall s,
     decompress_from_bytes (compress_to_bytes s) = s.
