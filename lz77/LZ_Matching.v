@@ -15,6 +15,34 @@ Module Matching.
   Definition find_match {A : Type} (eqb : A -> A -> bool) (s t : list A) : option nat :=
     find_match' eqb s t (length s).
 
+  Fixpoint find_largest_match' (before after: list byte) (l : nat) : option (nat * nat) :=
+    match l with
+    | 2 => None
+    | 1 => None
+    | 0 => None
+    | S k =>
+        let suff := (slice ((length before) - 4098) 4098 before) in
+        let m := find_match Byte.eqb suff (slice 0 l after) in
+        match m with
+        | None => find_largest_match' before after k
+        | Some p => Some (l, (length suff) - p)
+        end
+    end.
+
+  (* returns 3 <= length <= 18, 3 <= offset <= 4098 *)
+  Definition find_largest_match (before after: list byte): option (nat * nat) :=
+    find_largest_match' before after (min (length after) 18).
+
+  Definition one : byte := "1"%byte.
+  Definition zero : byte := "0"%byte.
+
+  Example find_largest_match_test1 : find_largest_match [zero; one; one; zero; one] [zero; one; one; zero] = Some (4, 5).
+  Proof. reflexivity. Qed.
+
+  Example find_largest_match_test2 : find_largest_match [zero; one] [zero] = None.
+  Proof. reflexivity. Qed.
+
+
   Lemma find_match_corr' {A : Type} (eqb : A -> A -> bool) (s t : list A) (n p : nat) :
     find_match' eqb s t p = Some n ->
     list_eqb eqb (slice n (length t) s) t = true.
@@ -50,33 +78,6 @@ Module Matching.
     - assumption.
     - lia.
   Qed.
-
-  Fixpoint find_largest_match' (before after: list byte) (l : nat) : option (nat * nat) :=
-    match l with
-    | 2 => None
-    | 1 => None
-    | 0 => None
-    | S k =>
-        let suff := (slice ((length before) - 4098) 4098 before) in
-        let m := find_match Byte.eqb suff (slice 0 l after) in
-        match m with
-        | None => find_largest_match' before after k
-        | Some p => Some (l, (length suff) - p)
-        end
-    end.
-
-  (* returns 3 <= length <= 18, 3 <= offset <= 4098 *)
-  Definition find_largest_match (before after: list byte): option (nat * nat) :=
-    find_largest_match' before after (min (length after) 18).
-
-  Definition one : byte := "1"%byte.
-  Definition zero : byte := "0"%byte.
-
-  Example find_largest_match_test1 : find_largest_match [zero; one; one; zero; one] [zero; one; one; zero] = Some (4, 5).
-  Proof. reflexivity. Qed.
-
-  Example find_largest_match_test2 : find_largest_match [zero; one] [zero] = None.
-  Proof. reflexivity. Qed.
 
   Lemma find_largest_match_corr1' : forall s t l len off,
     l <= 18 ->
