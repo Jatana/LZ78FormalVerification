@@ -1,4 +1,5 @@
 From Stdlib Require Import Arith List Lia Bool.
+Require Import Utils.
 Import ListNotations.
 
 Module Dict.
@@ -86,12 +87,55 @@ Module Dict.
           contradiction.
   Qed.
 
+  Lemma find_largest_prefix_correctness': forall ds dict s index bindex blen oindex olen,
+    find_largest_prefix' ds s index bindex blen = (oindex, olen) ->
+    nth_error dict bindex = Some (firstn blen s) ->
+    blen <= length s ->
+    (forall i, nth_error ds i = nth_error dict (index + i)) ->
+    olen <= length s /\ nth_error dict oindex = Some (firstn olen s).
+  Proof.
+    induction ds; intros * Hflp Hnth Hlen Hfa; simpl in *.
+    - inversion Hflp. subst.
+      tauto.
+    - destruct (prefix_eq a s && (blen <? length a))%bool eqn:?.
+      + apply andb_prop in Heqb as [Hpr Hblen].
+        apply prefix_eq_correctness in Hpr.
+        rewrite Nat.ltb_lt in Hblen.
+        eapply IHds.
+        * eassumption.
+        * rewrite Hpr.
+          specialize (Hfa 0).
+          simpl in Hfa.
+          rewrite Nat.add_0_r in Hfa.
+          congruence.
+        * now apply firstn_sublist_length_leq.
+        * intro i.
+          specialize (Hfa (S i)).
+          rewrite nth_error_cons_succ in Hfa.
+          assert (Hr: index + S i = S index + i) by lia.
+          rewrite Hr in Hfa.
+          eassumption.
+      + eapply IHds; try eassumption.
+        intro i.
+        specialize (Hfa (S i)).
+        rewrite nth_error_cons_succ in Hfa.
+        assert (Hr: index + S i = S index + i) by lia.
+        rewrite Hr in Hfa.
+        eassumption.
+  Qed.
+
   Lemma find_largest_prefix_correctness: forall dict s index len,
     find_largest_prefix dict s = (index, len) ->
-    In [] dict ->
+    nth_error dict 0 = Some [] ->
     len <= length s /\ nth_error dict index = Some (firstn len s).
   Proof.
-  Admitted.
+    unfold find_largest_prefix.
+    intros * Hflp Hfst.
+    pose proof (find_largest_prefix_correctness' dict dict s 0 0 0 index len Hflp) as Hs.
+    simpl in *.
+    specialize (Hs Hfst ltac:(lia)).
+    auto.
+  Qed.
 
   Lemma num_bits_for_dict_mono : forall a b,
       a <= b ->
