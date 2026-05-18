@@ -40,6 +40,8 @@ Module Impl.
   Definition compress (s: list bool) :=
     compress' (length s) empty_dict s.
 
+  Print empty_dict.
+
   Definition compress_to_bits (s: list bool) :=
     tokens_to_bits (compress s).
 
@@ -240,17 +242,42 @@ Module Impl.
     now apply Nat.succ_le_mono in H.
   Qed. 
 
-  Lemma compress'_eq_concat_phrases: forall fuel dict s tokens,
+  Lemma compress'_eq_concat_phrases: forall fuel s dict tokens,
     length s <= fuel ->
+    nth_error dict 0 = Some [] ->
     compress' fuel dict s = tokens ->
     s = concat (map get_phrase tokens).
-  Proof. Admitted.
+  Proof.
+    induction fuel. 
+      - intros. simpl in H0. subst. simpl. inversion H. Search (length _ = 0). eapply length_zero_iff_nil. assumption.
+      - intros. simpl in H0. destruct s. 
+        + subst. simpl. reflexivity.
+        + destruct (find_largest_prefix dict (b :: s)) eqn:Hd. destruct (skipn n0 (b::s)) eqn:Hd2.
+            * subst. simpl. rewrite Hd. rewrite Hd2. simpl. Search (_ ++ []). rewrite app_nil_r. specialize (find_largest_prefix_correctness _ _ _ _ Hd H0) as Hcor.
+              Search (skipn _ _ = []). assert (length (b :: s) <= n0).
+                -- apply skipn_all_iff. assumption.
+                -- Search (firstn _ _ = _ ). symmetry. eapply firstn_all2. assumption.
+            * simpl in H1. rewrite Hd in H1. rewrite Hd2 in H1. rewrite <- H1.
+              simpl. erewrite <- IHfuel with (s := l) (dict := dict ++ [firstn n0 (b :: s) ++ [b0]]).
+                -- rewrite <- app_assoc. Search (firstn). change ([b0] ++ l) with (b0 :: l).
+                   rewrite <- Hd2. symmetry. eapply firstn_skipn.
+                -- simpl in H. Search (skipn). specialize (length_skipn n0 (b::s)) as Hlen. rewrite Hd2 in Hlen.
+                   simpl in Hlen. destruct n0. lia. lia.
+                -- simpl. destruct (dict ++ [firstn n0 (b :: s) ++ [b0]]) eqn:Hdc.
+                  ++ Search (_ = []). specialize (app_eq_nil _ _  Hdc) as (Hcontr1 & _). rewrite Hcontr1 in H0. assumption.
+                  ++ destruct dict. 
+                    ** inversion H0.
+                    ** inversion H0. subst. simpl in Hdc. inversion Hdc. reflexivity.
+                -- reflexivity.
+  Qed.
 
-  Lemma compress'_agreement: forall fuel dict s tokens,
+  Lemma compress'_agreement: forall s fuel dict tokens,
     length s <= fuel ->
     compress' fuel dict s = tokens ->
     agreement dict tokens.
-  Proof. Admitted.
+  Proof.
+
+  Admitted.
 
   Lemma compress'_cor2 (fuel: nat) (dict: dict_type) (s: list bool)
                        (tokens prev_tokens: list Token) (i j: nat) (t1 t2: Token):
