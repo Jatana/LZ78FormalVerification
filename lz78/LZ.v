@@ -31,10 +31,25 @@ Module Impl.
     | Last _ phrase => phrase
     end.
 
+  Definition not_last (t : Token) :=
+    match t with
+      | Tok _ _ _ => True
+      | Last _ _  => False
+    end.
+
   Definition phrases_differ (tokens tokens': list Token) := 
     forall i j t1 t2,
       nth_error tokens i = Some t1 ->
       nth_error tokens' j = Some t2 ->
+      not_last t1 -> not_last t2 ->
+      get_phrase t1 <> get_phrase t2.
+
+  Definition phrases_differ_one (tokens: list Token) := 
+    forall i j t1 t2,
+      (i <> j) ->
+      nth_error tokens i = Some t1 ->
+      nth_error tokens j = Some t2 ->
+      not_last t1 -> not_last t2 ->
       get_phrase t1 <> get_phrase t2.
 
   Definition compress (s: list bool) :=
@@ -271,21 +286,135 @@ Module Impl.
                 -- reflexivity.
   Qed.
 
-  Lemma compress'_agreement: forall s fuel dict tokens,
+  Lemma compress'_agreement: forall fuel s dict tokens,
     length s <= fuel ->
     compress' fuel dict s = tokens ->
     agreement dict tokens.
   Proof.
+    induction fuel.
+      - intros. inversion H. destruct s.  2: { simpl in H2. lia. } 
+        simpl in H0. rewrite <- H0. unfold agreement. intros. inversion H1.
+      - intros. simpl in H0. destruct s. rewrite <- H0. unfold agreement. intros. inversion H1.
+        destruct (find_largest_prefix dict (b :: s)) eqn:Hd. destruct (skipn n0 (b::s)) eqn:Hd2.
+          * rewrite <- H0. unfold agreement. intros. inversion H1.
+            +    
+
 
   Admitted.
 
-  Lemma compress'_cor2 (fuel: nat) (dict: dict_type) (s: list bool)
-                       (tokens prev_tokens: list Token) (i j: nat) (t1 t2: Token):
+  Lemma agreement_app : forall dict tokens phr next n,
+    agreement dict tokens -> agreement (dict ++ [phr ++ [next]]) (tokens ++ [Tok n phr next]).
+  Proof.
+    intros.
+    unfold agreement. intros. unfold agreement in H. Search (In _ (_ ++ _ )). apply in_or_app.
+    specialize (in_app_or _ _ _ H0) as Hcase. destruct Hcase as [H1 | H2].
+      - left. eapply H. exact H1.
+      - right. inversion H2. 
+        * inversion H1. subst. constructor. constructor.
+        * inversion H1.
+  Qed.
+
+  Lemma nth_error_some_0 {A : Type}: forall (l1 : list A) (l2 : list A) x,
+    nth_error l1 0 = Some x -> nth_error (l1 ++ l2) 0 = Some x.
+  Proof.
+    intros. destruct l1.
+      - inversion H.
+      - simpl. simpl in H. assumption.
+  Qed. 
+
+  Lemma nth_error_some {A : Type}: forall i (l1 : list A) (l2 : list A) x,
+    nth_error l1 i = Some x -> nth_error (l1 ++ l2) i = Some x.
+  Proof.
+    induction i.
+    intros. apply nth_error_some_0. assumption.
+    intros. destruct l1.
+      - inversion H.
+      - simpl. simpl in H. apply IHi. assumption.  
+  Qed. 
+
+  Lemma skipn_length {A : Type} : forall n (l l' : list A) x,
+    skipn n l = x :: l' -> length l >= S n.
+  Proof.
+    induction n.
+      - intros. simpl in H. rewrite H. simpl. lia. 
+      - intros. simpl in H. destruct l. 
+        * inversion H.
+        * simpl. specialize (IHn _ _ _ H). lia.
+  Qed.
+    
+  Lemma compress'_cor2 : forall fuel dict s tokens prev_tokens,
     length s <= fuel ->
     compress' fuel dict s = tokens ->
     agreement dict prev_tokens ->
-    phrases_differ prev_tokens tokens /\ phrases_differ tokens tokens.
-  Proof. Admitted.
+    nth_error dict 0 = Some [] ->
+    phrases_differ prev_tokens tokens /\ phrases_differ_one tokens.
+  Proof.
+    induction fuel.
+      - intros. inversion H. destruct s.  2: { simpl in H. lia. }
+        simpl in H0. subst. unfold phrases_differ. unfold phrases_differ_one. split.
+          + intros. Search (nth_error). rewrite nth_error_nil in H3. inversion H3.
+          + intros. rewrite nth_error_nil in H3. inversion H3.
+      - intros. simpl in H0. destruct s.
+        + subst. simpl. split. unfold phrases_differ. unfold phrases_differ_one. intros. rewrite nth_error_nil in H3. inversion H3.
+          unfold phrases_differ. unfold phrases_differ_one. intros. rewrite nth_error_nil in H3. inversion H3.
+        + destruct (find_largest_prefix dict (b :: s)) eqn:Hd. destruct (skipn n0 (b::s)) eqn:Hd2.
+          * subst. split. unfold phrases_differ. intros. 
+            destruct j. 2: { simpl in H3. rewrite nth_error_nil in H3. inversion H3. }
+            simpl in H3. inversion H3. subst. simpl. unfold agreement in H1.
+            Search (In). destruct t1.
+              -- unfold not_last in H5. contradiction.
+              -- unfold not_last in H5. contradiction.
+              -- unfold phrases_differ_one. intros. destruct i. simpl in H3. inversion H3. subst. unfold not_last in H5. contradiction.
+                 simpl in H3. Search (nth_error [] _). rewrite nth_error_nil in H3. inversion H3.
+          * destruct tokens. inversion H0.
+            specialize (IHfuel (dict ++ [firstn n0 (b :: s) ++ [b0]]) l tokens (prev_tokens ++ [Tok n (firstn n0 (b :: s)) b0])).
+            assert (length l <= fuel). {
+              Search (skipn _ _). specialize (length_skipn n0 (b :: s)) as Hlen. rewrite Hd2 in Hlen. assert (length (b0 :: l) <= S fuel - n0) by lia. simpl in H3. destruct n0; lia.
+            }
+            specialize (IHfuel H3). clear H3.
+            inversion H0. specialize (IHfuel H5). 
+            assert (agreement (dict ++ [firstn n0 (b :: s) ++ [b0]]) (prev_tokens ++ [Tok n (firstn n0 (b :: s)) b0])). {
+              eapply agreement_app. assumption. 
+            }
+            specialize (IHfuel H3). clear H3. 
+            assert (nth_error (dict ++ [firstn n0 (b :: s) ++ [b0]]) 0 = Some []). {
+              eapply nth_error_some. assumption.
+            }
+            specialize (IHfuel H3). clear H3.
+            destruct IHfuel as (IHfuel1 & IHfuel2).
+
+            split. unfold phrases_differ. intros. unfold agreement in H1. destruct j.
+                -- simpl in H6. inversion H6. clear H6. simpl. intros Hcontr. destruct t1. 2: { inversion H7. } simpl in Hcontr.
+                   clear IHfuel1 IHfuel2 H H0 H5 H7 H8 H4. specialize (nth_error_In _ _ H3) as Hin. specialize (H1 _ _ _ Hin).
+                   specialize (find_largest_prefix_opt dict ((firstn n0 (b :: s)) ++ [b0]) l n n0) as Hopt.
+                   assert ((firstn n0 (b :: s) ++ [b0]) ++ l = b :: s). {
+                    Search (firstn _ _). rewrite <- app_assoc. change ([b0] ++ l) with (b0 :: l). rewrite <- Hd2. 
+                    rewrite firstn_skipn. reflexivity.
+                   }
+                   rewrite H in Hopt. specialize (Hopt Hd). rewrite <- Hcontr in Hopt. specialize (Hopt H1). rewrite Hcontr in Hopt. 
+                   Search (skipn _ _ = _). specialize (skipn_length _ _ _ _ Hd2) as Hlen. Search firstn. specialize (firstn_length_le (b :: s)) as Hbound.
+                   specialize (Hbound n0). assert (n0 <= length (b :: s)) by lia. specialize (Hbound H0). Search (length (_ ++ _) = length _ + length _). rewrite length_app in Hopt.
+                   rewrite Hbound in Hopt. simpl in Hopt. lia.
+                   
+                -- Search (nth_error (_ :: _) (S _) = nth_error _ _). rewrite nth_error_cons_succ in H6.
+                   rewrite H5 in H6. unfold phrases_differ in IHfuel1. specialize (IHfuel1 i j t1 t2). apply IHfuel1.
+                   eapply nth_error_some. do 4 assumption. assumption. assumption. assumption.
+
+                -- rewrite H5. clear H5. clear H0. unfold phrases_differ_one. intros. destruct i.
+                  ** destruct j.
+                    ++ auto.
+                    ++ rewrite nth_error_cons_succ in H5. unfold phrases_differ in IHfuel1. specialize (IHfuel1 (length prev_tokens) j t1 t2).
+                       Search (nth_error _ _). specialize (nth_error_app2 prev_tokens [Tok n (firstn n0 (b :: s)) b0]) as Hlem.
+                       specialize (Hlem (length prev_tokens) ltac:(lia)). replace ((length prev_tokens - length prev_tokens)) with 0  in Hlem by lia.
+                       rewrite Hlem in IHfuel1. simpl in IHfuel1. simpl in H3. rewrite H3 in IHfuel1. specialize (IHfuel1 eq_refl H5 H6 H7). assumption.
+                  ** destruct j.
+                    ++ rewrite nth_error_cons_succ in H3. unfold phrases_differ in IHfuel1. specialize (IHfuel1 (length prev_tokens) i t2 t1).
+                       Search (nth_error _ _). specialize (nth_error_app2 prev_tokens [Tok n (firstn n0 (b :: s)) b0]) as Hlem.
+                       specialize (Hlem (length prev_tokens) ltac:(lia)). replace ((length prev_tokens - length prev_tokens)) with 0  in Hlem by lia.
+                       rewrite Hlem in IHfuel1. simpl in IHfuel1. simpl in H5. rewrite H5 in IHfuel1. specialize (IHfuel1 eq_refl H3 H7 H6). symmetry. assumption.
+                    ++ unfold phrases_differ_one in IHfuel2.   rewrite nth_error_cons_succ in H3. rewrite nth_error_cons_succ in H5.
+                       specialize (IHfuel2 i j t1 t2 ltac:(lia) H3 H5 H6 H7). assumption.
+  Qed.
 
   Lemma comb (tokens: list Token) :
     (phrases_differ tokens tokens) ->
