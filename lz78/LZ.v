@@ -351,40 +351,4 @@ Module Impl.
     tauto.
   Qed.
 
-  Theorem compress_to_bits_bound: forall s,
-    length (compress_to_bits s) <= length s + 10 * length s / Nat.log2 (length s).
-  Proof.
-    unfold compress_to_bits, compress, tokens_to_bits.
-    intros.
-    pose proof (compress_bound s (compress s) ltac:(reflexivity)).
-    set (n := length (compress s)).
-    set (rhs := n * (Nat.log2 n - 3)).
-    etransitivity.
-    2: {
-      assert (rhs + 10 * rhs / Nat.log2 rhs <= length s + 10 * length s / Nat.log2 (length s)). {
-        (* True for rhs >= 3 by monotonicity of x/log2(x) *)
-        admit.
-      }
-      eassumption.
-    }
-    unfold compress, num_bits_for_dict in *.
-    pose proof (tokens_to_bits'_length_bound (compress' (length s) empty_dict s) 1
-                 (1 + length (compress' (length s) empty_dict s)) ltac:(lia)).
-    etransitivity.
-    - eassumption.
-    - unfold num_bits_for_dict.
-      destruct (1 + length (compress' (length s) empty_dict s) <=? 1) eqn:?.
-      + admit. (* True since length (compress' ...) = 0 *)
-      + assert ((1 + length (compress' (length s) empty_dict s) - 1) = length (compress' (length s) empty_dict s)) by lia.
-        rewrite H1.
-        subst n rhs.
-        set (n := length (compress' (length s) empty_dict s)).
-        (*
-          n (log2(n) + 2)
-           == n (log2(n) - 3) + 10 (n log2(n)) / (log2(n^2))
-     for n large enough (~10 works from plots):
-           <= n (log2(n) - 3) + 10 (n (log2(n) - 3)) / (log2(n (log2(n) - 3)))
-        *)
-  Admitted.
-
 End Impl.
