@@ -523,17 +523,11 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
 
 
   Lemma comb (tokens: list Token) :
-<<<<<<< HEAD
     (phrases_differ_one tokens) ->
     length (concat (map get_phrase tokens)) >= (length tokens) * (Nat.log2 (length tokens) - 10 * (Nat.log2 (Nat.log2 (length tokens))) - 10).
   Proof. 
 
   Admitted.
-=======
-    phrases_differ_one tokens ->
-    length (concat (map get_phrase tokens)) >= (length tokens) * (Nat.log2 (length tokens) - 3).
-  Proof. Admitted.
->>>>>>> 61d68da90ac724d892358528e9c88b982f7d09fd
 
   Lemma compress_bound: forall s tokens,
     compress s = tokens ->
