@@ -39,6 +39,25 @@ Module Util.
       congruence.
   Qed.
 
+  Lemma nth_error_some {A : Type}: forall i (l1 : list A) (l2 : list A) x,
+    nth_error l1 i = Some x ->
+    nth_error (l1 ++ l2) i = Some x.
+  Proof.
+    induction i; intros * H; destruct l1; simpl in *; auto; inversion H.
+  Qed.
+
+  Lemma skipn_length {A : Type} : forall n (l l' : list A) x,
+    skipn n l = x :: l' ->
+    length l >= S n.
+  Proof.
+    induction n; intros * H. simpl in *.
+    - rewrite H.
+      simpl. lia.
+    - destruct l; simpl.
+      + inversion H.
+      + specialize (IHn _ _ _ H). lia.
+  Qed.
+
 End Util.
 
 Export Util.

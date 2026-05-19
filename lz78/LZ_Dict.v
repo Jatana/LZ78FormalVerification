@@ -50,10 +50,8 @@ Module Dict.
       etransitivity.
       + exact H2log.
       + assert (Hp: 256 = 2^8) by now cbv.
-
-        assert ((S (Nat.log2 (n - 1))) = ((Nat.log2 (n - 1) + 1))).
-        lia.
-        rewrite H0.
+        assert (Heq: (S (Nat.log2 (n - 1))) = ((Nat.log2 (n - 1) + 1))) by lia.
+        rewrite Heq.
         lia.
   Qed.
 
@@ -138,48 +136,62 @@ Module Dict.
   Qed.
 
   Lemma find_largest_prefix_corr1' : forall dict s index best_index best_len n l,
-    find_largest_prefix' dict s index best_index best_len = (n, l) -> l >= best_len.
+    find_largest_prefix' dict s index best_index best_len = (n, l) ->
+    l >= best_len.
   Proof.
-    induction dict.
-      - intros. simpl in H. inversion H. lia.
-      - intros. simpl in H. destruct (best_len <? length a) eqn:Hineq.
-        * destruct (prefix_eq a s && true).
-          + rewrite Nat.ltb_lt in Hineq. assert (l >= length a). 2: { lia. }
-            eapply IHdict. exact H.
-          + rewrite Nat.ltb_lt in Hineq. eapply IHdict. exact H.
-        * Search (_ <? _ = false). rewrite Nat.ltb_ge in Hineq. 
-          replace (prefix_eq a s && false) with (false) in H.
-            + eapply IHdict. exact H.
-            + destruct (prefix_eq a s); auto.
-  Qed.   
+    induction dict; intros * Hflp; simpl in *.
+    - inversion Hflp.
+      lia.
+    - destruct (best_len <? length a) eqn:Hineq.
+        + destruct (prefix_eq a s && true).
+          * rewrite Nat.ltb_lt in Hineq.
+            assert (l >= length a).
+            -- eapply IHdict.
+               eassumption.
+            -- lia.
+          * eapply IHdict.
+            eassumption.
+        + rewrite Nat.ltb_ge in Hineq.
+          replace (prefix_eq a s && false) with false in Hflp.
+          eapply IHdict.
+          eassumption.
+          destruct (prefix_eq a s); auto.
+  Qed.
 
   Lemma find_largest_prefix_opt': forall dict s t index best_index best_len n l,
-    (find_largest_prefix' dict (s ++ t) index best_index best_len) = (n, l)
-      -> In s dict -> l >= length s.
+    find_largest_prefix' dict (s ++ t) index best_index best_len = (n, l) ->
+    In s dict ->
+    l >= length s.
   Proof.
-    induction dict.
-      - intros. inversion H0.
-      - intros. inversion H0.
-        + subst. simpl in H. assert (prefix_eq s (s ++ t) = true).
-          * apply prefix_eq_correctness. Search (firstn _ _ = _). replace (length s) with (length s + 0) by (ltac:(lia)). erewrite firstn_app_2.
-            simpl. Search (_ ++ []). rewrite app_nil_r. reflexivity.
-          * rewrite H1 in H. destruct (best_len <? length s) eqn:Hbound.
-            -- simpl in H. Search (_ <? _ = true). rewrite Nat.ltb_lt in Hbound.
-               eapply find_largest_prefix_corr1'. exact H.
-            -- replace (true && false) with (false) in H. 2: { auto. }
-               rewrite Nat.ltb_ge in Hbound. assert (l >= best_len). 2: { lia. }
-               eapply find_largest_prefix_corr1'. exact H.
-        + simpl in H. destruct (prefix_eq a (s ++ t) && (best_len <? length a)).
-          * eapply IHdict. exact H. exact H1.
-          * eapply IHdict. exact H. exact H1.
+    induction dict; intros * Hflp Hin; inversion Hin; subst; simpl in *.
+    - assert (Ht: prefix_eq s (s ++ t) = true).
+      + apply prefix_eq_correctness.
+        replace (length s) with (length s + 0) by ltac:(lia).
+        erewrite firstn_app_2.
+        now rewrite app_nil_r.
+      + rewrite Ht in Hflp.
+        destruct (best_len <? length s) eqn:Hbound; simpl in *.
+        * rewrite Nat.ltb_lt in Hbound.
+               eapply find_largest_prefix_corr1'.
+               eassumption.
+        * replace (true && false) with false in Hflp by auto.
+          rewrite Nat.ltb_ge in Hbound.
+          assert (l >= best_len). {
+            eapply find_largest_prefix_corr1'.
+            eassumption.
+          }
+          lia.
+    - destruct (prefix_eq a (s ++ t) && (best_len <? length a));
+      eapply IHdict; eassumption.
   Qed.
 
   Lemma find_largest_prefix_opt: forall dict s t index len,
-    find_largest_prefix dict (s ++ t) = (index, len)
-      -> In s dict -> len >= length s.
+    find_largest_prefix dict (s ++ t) = (index, len) ->
+    In s dict ->
+    len >= length s.
   Proof.
-    intros. unfold find_largest_prefix in H. 
-    eapply find_largest_prefix_opt'. exact H. exact H0.
+    intros. unfold find_largest_prefix in *.
+    eapply find_largest_prefix_opt'; eassumption.
   Qed.
 
 
