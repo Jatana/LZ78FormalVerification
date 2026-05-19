@@ -18,6 +18,38 @@ Module Tokens.
     | [] => True
     end.
 
+  Definition agreement (dict: dict_type) (tokens: list Token) :=
+    forall index phr next,
+      In (Tok index phr next) tokens ->
+      In (phr ++ [next]) dict.
+
+  Definition get_phrase (t: Token) := 
+    match t with
+    | Tok _ phrase next => phrase ++ [next]
+    | Last _ phrase => phrase
+    end.
+
+  Definition not_last (t : Token) :=
+    match t with
+      | Tok _ _ _ => True
+      | Last _ _  => False
+    end.
+
+  Definition phrases_differ (tokens tokens': list Token) := 
+    forall i j t1 t2,
+      nth_error tokens i = Some t1 ->
+      nth_error tokens' j = Some t2 ->
+      not_last t1 -> not_last t2 ->
+      get_phrase t1 <> get_phrase t2.
+
+  Definition phrases_differ_one (tokens: list Token) := 
+    forall i j t1 t2,
+      (i <> j) ->
+      nth_error tokens i = Some t1 ->
+      nth_error tokens j = Some t2 ->
+      not_last t1 -> not_last t2 ->
+      get_phrase t1 <> get_phrase t2.
+
   Fixpoint nat_to_k_bits (k n : nat) : list bool :=
     match k with
       | 0 => []
@@ -68,6 +100,22 @@ Module Tokens.
 
   Definition bits_to_tokens (bits: list bool) :=
     bits_to_tokens' (length bits) 1 bits.
+
+
+  Lemma agreement_app : forall dict tokens phr next n,
+    agreement dict tokens ->
+    agreement (dict ++ [phr ++ [next]]) (tokens ++ [Tok n phr next]).
+  Proof.
+    unfold agreement. 
+    intros.
+    apply in_or_app.
+    specialize (in_app_or _ _ _ H0) as Hcase.
+    destruct Hcase as [H1 | H2]; [left | right].
+    - eauto.
+    - inversion H2; inversion H1.
+      subst.
+      do 2 constructor.
+  Qed.
 
   Lemma nat_to_bit_correctness: forall n,
     n < 2 ->

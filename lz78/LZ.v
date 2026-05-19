@@ -20,42 +20,8 @@ Module Impl.
         end
     end.
 
-  Definition agreement (dict: dict_type) (tokens: list Token) :=
-    forall index phr next,
-      In (Tok index phr next) tokens ->
-      In (phr ++ [next]) dict.
-
-  Definition get_phrase (t: Token) := 
-    match t with
-    | Tok _ phrase next => phrase ++ [next]
-    | Last _ phrase => phrase
-    end.
-
-  Definition not_last (t : Token) :=
-    match t with
-      | Tok _ _ _ => True
-      | Last _ _  => False
-    end.
-
-  Definition phrases_differ (tokens tokens': list Token) := 
-    forall i j t1 t2,
-      nth_error tokens i = Some t1 ->
-      nth_error tokens' j = Some t2 ->
-      not_last t1 -> not_last t2 ->
-      get_phrase t1 <> get_phrase t2.
-
-  Definition phrases_differ_one (tokens: list Token) := 
-    forall i j t1 t2,
-      (i <> j) ->
-      nth_error tokens i = Some t1 ->
-      nth_error tokens j = Some t2 ->
-      not_last t1 -> not_last t2 ->
-      get_phrase t1 <> get_phrase t2.
-
   Definition compress (s: list bool) :=
     compress' (length s) empty_dict s.
-
-  Print empty_dict.
 
   Definition compress_to_bits (s: list bool) :=
     tokens_to_bits (compress s).
@@ -77,34 +43,6 @@ Module Impl.
 
   Definition decompress (tokens: list Token) :=
     decompress' empty_dict tokens.
-
-  Lemma decompress'_indep : forall tokens tokens' dict,
-      list_eq token_equiv tokens tokens' -> (decompress' dict tokens) = (decompress' dict tokens').
-  Proof.
-    induction tokens.
-      - intros. simpl in H. destruct tokens'. 
-        -- auto.
-        -- inversion H.
-      - intros.
-        simpl.
-        simpl in H. destruct tokens'.
-          + inversion H.
-          + destruct H as (Ha & Hb). unfold token_equiv in Ha. destruct a eqn:Hd.
-            * destruct t eqn:Hdt.
-              -- inversion Ha. subst. simpl. destruct (nth_error dict index0).
-                ++ erewrite IHtokens. reflexivity. assumption.
-                ++ reflexivity.
-              -- inversion Ha.
-            * destruct t eqn:Hdt.
-              -- inversion Ha.
-              -- inversion Ha. reflexivity.
-  Qed.
-
-  Lemma decompress_indep : forall tokens tokens',
-    list_eq token_equiv tokens tokens' -> (decompress tokens) = (decompress tokens').
-  Proof.
-    intros. unfold decompress. eapply decompress'_indep. assumption.
-  Qed.
 
   Definition decompress_from_bits (s: list bool) :=
     decompress (bits_to_tokens s).
@@ -145,6 +83,28 @@ Module Impl.
         * rewrite length_app.
           simpl.
           lia.
+  Qed.
+
+  Lemma decompress'_indep : forall tokens tokens' dict,
+      list_eq token_equiv tokens tokens' ->
+      decompress' dict tokens = decompress' dict tokens'.
+  Proof.
+    induction tokens; intros * H; simpl in *; destruct tokens'; try tauto.
+    destruct H as (Ha & Hb).
+    unfold token_equiv in Ha.
+    destruct a eqn:Hd, t eqn:Hdt; simpl; subst; try tauto.
+    inversion Ha. subst.
+    destruct (nth_error dict index0).
+    + erewrite IHtokens; auto.
+    + reflexivity.
+  Qed.
+
+  Lemma decompress_indep : forall tokens tokens',
+    list_eq token_equiv tokens tokens' ->
+    decompress tokens = decompress tokens'.
+  Proof.
+    intros. unfold decompress.
+    eapply decompress'_indep. assumption.
   Qed.
 
   Lemma compress_correctness': forall fuel dict s,
@@ -240,7 +200,7 @@ Module Impl.
         lia.
   Qed.
 
-  Theorem compress_to_bits_upperbound: forall s,
+  Theorem compress_to_bits_upperbound_simple: forall s,
       length (compress_to_bits s)
         <= length s * (num_bits_for_dict (S (length s)) + 1).
   Proof.
@@ -263,86 +223,37 @@ Module Impl.
     compress' fuel dict s = tokens ->
     s = concat (map get_phrase tokens).
   Proof.
-    induction fuel. 
-      - intros. simpl in H0. subst. simpl. inversion H. Search (length _ = 0). eapply length_zero_iff_nil. assumption.
-      - intros. simpl in H0. destruct s. 
-        + subst. simpl. reflexivity.
-        + destruct (find_largest_prefix dict (b :: s)) eqn:Hd. destruct (skipn n0 (b::s)) eqn:Hd2.
-            * subst. simpl. rewrite Hd. rewrite Hd2. simpl. Search (_ ++ []). rewrite app_nil_r. specialize (find_largest_prefix_correctness _ _ _ _ Hd H0) as Hcor.
-              Search (skipn _ _ = []). assert (length (b :: s) <= n0).
-                -- apply skipn_all_iff. assumption.
-                -- Search (firstn _ _ = _ ). symmetry. eapply firstn_all2. assumption.
-            * simpl in H1. rewrite Hd in H1. rewrite Hd2 in H1. rewrite <- H1.
-              simpl. erewrite <- IHfuel with (s := l) (dict := dict ++ [firstn n0 (b :: s) ++ [b0]]).
-                -- rewrite <- app_assoc. Search (firstn). change ([b0] ++ l) with (b0 :: l).
-                   rewrite <- Hd2. symmetry. eapply firstn_skipn.
-                -- simpl in H. Search (skipn). specialize (length_skipn n0 (b::s)) as Hlen. rewrite Hd2 in Hlen.
-                   simpl in Hlen. destruct n0. lia. lia.
-                -- simpl. destruct (dict ++ [firstn n0 (b :: s) ++ [b0]]) eqn:Hdc.
-                  ++ Search (_ = []). specialize (app_eq_nil _ _  Hdc) as (Hcontr1 & _). rewrite Hcontr1 in H0. assumption.
-                  ++ destruct dict. 
-                    ** inversion H0.
-                    ** inversion H0. subst. simpl in Hdc. inversion Hdc. reflexivity.
-                -- reflexivity.
+    induction fuel; intros * Hlen Hnth Hc; subst; simpl in *.
+    - inversion Hlen.
+      now apply length_zero_iff_nil.
+    - destruct s.
+      + reflexivity.
+      + destruct (find_largest_prefix dict (b :: s)) eqn:Hd, (skipn n0 (b :: s)) eqn:Hd2; simpl in *.
+        * rewrite app_nil_r.
+          specialize (find_largest_prefix_correctness _ _ _ _ Hd Hnth) as Hcor.
+          assert (length (b :: s) <= n0) by now apply skipn_all_iff.
+          symmetry.
+          now apply firstn_all2.
+        * rewrite <- IHfuel with (s := l) (dict := dict ++ [firstn n0 (b :: s) ++ [b0]]).
+          -- rewrite <- app_assoc.
+             change ([b0] ++ l) with (b0 :: l).
+             rewrite <- Hd2.
+             symmetry.
+             eapply firstn_skipn.
+          -- specialize (length_skipn n0 (b :: s)) as Hlsn.
+             rewrite Hd2 in Hlsn.
+             simpl in Hlsn.
+             destruct n0; lia.
+          -- destruct (dict ++ [firstn n0 (b :: s) ++ [b0]]) eqn:Hdc.
+             ++ specialize (app_eq_nil _ _  Hdc) as (Hcontr1 & _).
+                now rewrite Hcontr1 in Hnth.
+             ++ destruct dict; inversion Hnth; subst.
+                simpl in Hdc.
+                now inversion Hdc.
+          -- reflexivity.
   Qed.
 
-  Lemma compress'_agreement: forall fuel s dict tokens,
-    length s <= fuel ->
-    compress' fuel dict s = tokens ->
-    agreement dict tokens.
-  Proof.
-    induction fuel.
-      - intros. inversion H. destruct s.  2: { simpl in H2. lia. } 
-        simpl in H0. rewrite <- H0. unfold agreement. intros. inversion H1.
-      - intros. simpl in H0. destruct s. rewrite <- H0. unfold agreement. intros. inversion H1.
-        destruct (find_largest_prefix dict (b :: s)) eqn:Hd. destruct (skipn n0 (b::s)) eqn:Hd2.
-          * rewrite <- H0. unfold agreement. intros. inversion H1.
-            +    
-
-
-  Admitted.
-
-  Lemma agreement_app : forall dict tokens phr next n,
-    agreement dict tokens -> agreement (dict ++ [phr ++ [next]]) (tokens ++ [Tok n phr next]).
-  Proof.
-    intros.
-    unfold agreement. intros. unfold agreement in H. Search (In _ (_ ++ _ )). apply in_or_app.
-    specialize (in_app_or _ _ _ H0) as Hcase. destruct Hcase as [H1 | H2].
-      - left. eapply H. exact H1.
-      - right. inversion H2. 
-        * inversion H1. subst. constructor. constructor.
-        * inversion H1.
-  Qed.
-
-  Lemma nth_error_some_0 {A : Type}: forall (l1 : list A) (l2 : list A) x,
-    nth_error l1 0 = Some x -> nth_error (l1 ++ l2) 0 = Some x.
-  Proof.
-    intros. destruct l1.
-      - inversion H.
-      - simpl. simpl in H. assumption.
-  Qed. 
-
-  Lemma nth_error_some {A : Type}: forall i (l1 : list A) (l2 : list A) x,
-    nth_error l1 i = Some x -> nth_error (l1 ++ l2) i = Some x.
-  Proof.
-    induction i.
-    intros. apply nth_error_some_0. assumption.
-    intros. destruct l1.
-      - inversion H.
-      - simpl. simpl in H. apply IHi. assumption.  
-  Qed. 
-
-  Lemma skipn_length {A : Type} : forall n (l l' : list A) x,
-    skipn n l = x :: l' -> length l >= S n.
-  Proof.
-    induction n.
-      - intros. simpl in H. rewrite H. simpl. lia. 
-      - intros. simpl in H. destruct l. 
-        * inversion H.
-        * simpl. specialize (IHn _ _ _ H). lia.
-  Qed.
-    
-  Lemma compress'_cor2 : forall fuel dict s tokens prev_tokens,
+  Lemma compress'_phrases_differ: forall fuel dict s tokens prev_tokens,
     length s <= fuel ->
     compress' fuel dict s = tokens ->
     agreement dict prev_tokens ->
@@ -352,7 +263,7 @@ Module Impl.
     induction fuel.
       - intros. inversion H. destruct s.  2: { simpl in H. lia. }
         simpl in H0. subst. unfold phrases_differ. unfold phrases_differ_one. split.
-          + intros. Search (nth_error). rewrite nth_error_nil in H3. inversion H3.
+          + intros. rewrite nth_error_nil in H3. inversion H3.
           + intros. rewrite nth_error_nil in H3. inversion H3.
       - intros. simpl in H0. destruct s.
         + subst. simpl. split. unfold phrases_differ. unfold phrases_differ_one. intros. rewrite nth_error_nil in H3. inversion H3.
@@ -361,15 +272,15 @@ Module Impl.
           * subst. split. unfold phrases_differ. intros. 
             destruct j. 2: { simpl in H3. rewrite nth_error_nil in H3. inversion H3. }
             simpl in H3. inversion H3. subst. simpl. unfold agreement in H1.
-            Search (In). destruct t1.
+            destruct t1.
               -- unfold not_last in H5. contradiction.
               -- unfold not_last in H5. contradiction.
               -- unfold phrases_differ_one. intros. destruct i. simpl in H3. inversion H3. subst. unfold not_last in H5. contradiction.
-                 simpl in H3. Search (nth_error [] _). rewrite nth_error_nil in H3. inversion H3.
+                 simpl in H3. rewrite nth_error_nil in H3. inversion H3.
           * destruct tokens. inversion H0.
             specialize (IHfuel (dict ++ [firstn n0 (b :: s) ++ [b0]]) l tokens (prev_tokens ++ [Tok n (firstn n0 (b :: s)) b0])).
             assert (length l <= fuel). {
-              Search (skipn _ _). specialize (length_skipn n0 (b :: s)) as Hlen. rewrite Hd2 in Hlen. assert (length (b0 :: l) <= S fuel - n0) by lia. simpl in H3. destruct n0; lia.
+              specialize (length_skipn n0 (b :: s)) as Hlen. rewrite Hd2 in Hlen. assert (length (b0 :: l) <= S fuel - n0) by lia. simpl in H3. destruct n0; lia.
             }
             specialize (IHfuel H3). clear H3.
             inversion H0. specialize (IHfuel H5). 
@@ -388,15 +299,15 @@ Module Impl.
                    clear IHfuel1 IHfuel2 H H0 H5 H7 H8 H4. specialize (nth_error_In _ _ H3) as Hin. specialize (H1 _ _ _ Hin).
                    specialize (find_largest_prefix_opt dict ((firstn n0 (b :: s)) ++ [b0]) l n n0) as Hopt.
                    assert ((firstn n0 (b :: s) ++ [b0]) ++ l = b :: s). {
-                    Search (firstn _ _). rewrite <- app_assoc. change ([b0] ++ l) with (b0 :: l). rewrite <- Hd2. 
+                    rewrite <- app_assoc. change ([b0] ++ l) with (b0 :: l). rewrite <- Hd2. 
                     rewrite firstn_skipn. reflexivity.
                    }
                    rewrite H in Hopt. specialize (Hopt Hd). rewrite <- Hcontr in Hopt. specialize (Hopt H1). rewrite Hcontr in Hopt. 
-                   Search (skipn _ _ = _). specialize (skipn_length _ _ _ _ Hd2) as Hlen. Search firstn. specialize (firstn_length_le (b :: s)) as Hbound.
-                   specialize (Hbound n0). assert (n0 <= length (b :: s)) by lia. specialize (Hbound H0). Search (length (_ ++ _) = length _ + length _). rewrite length_app in Hopt.
+                   specialize (skipn_length _ _ _ _ Hd2) as Hlen. specialize (firstn_length_le (b :: s)) as Hbound.
+                   specialize (Hbound n0). assert (n0 <= length (b :: s)) by lia. specialize (Hbound H0). rewrite length_app in Hopt.
                    rewrite Hbound in Hopt. simpl in Hopt. lia.
                    
-                -- Search (nth_error (_ :: _) (S _) = nth_error _ _). rewrite nth_error_cons_succ in H6.
+                -- rewrite nth_error_cons_succ in H6.
                    rewrite H5 in H6. unfold phrases_differ in IHfuel1. specialize (IHfuel1 i j t1 t2). apply IHfuel1.
                    eapply nth_error_some. do 4 assumption. assumption. assumption. assumption.
 
@@ -404,12 +315,12 @@ Module Impl.
                   ** destruct j.
                     ++ auto.
                     ++ rewrite nth_error_cons_succ in H5. unfold phrases_differ in IHfuel1. specialize (IHfuel1 (length prev_tokens) j t1 t2).
-                       Search (nth_error _ _). specialize (nth_error_app2 prev_tokens [Tok n (firstn n0 (b :: s)) b0]) as Hlem.
+                       specialize (nth_error_app2 prev_tokens [Tok n (firstn n0 (b :: s)) b0]) as Hlem.
                        specialize (Hlem (length prev_tokens) ltac:(lia)). replace ((length prev_tokens - length prev_tokens)) with 0  in Hlem by lia.
                        rewrite Hlem in IHfuel1. simpl in IHfuel1. simpl in H3. rewrite H3 in IHfuel1. specialize (IHfuel1 eq_refl H5 H6 H7). assumption.
                   ** destruct j.
                     ++ rewrite nth_error_cons_succ in H3. unfold phrases_differ in IHfuel1. specialize (IHfuel1 (length prev_tokens) i t2 t1).
-                       Search (nth_error _ _). specialize (nth_error_app2 prev_tokens [Tok n (firstn n0 (b :: s)) b0]) as Hlem.
+                       specialize (nth_error_app2 prev_tokens [Tok n (firstn n0 (b :: s)) b0]) as Hlem.
                        specialize (Hlem (length prev_tokens) ltac:(lia)). replace ((length prev_tokens - length prev_tokens)) with 0  in Hlem by lia.
                        rewrite Hlem in IHfuel1. simpl in IHfuel1. simpl in H5. rewrite H5 in IHfuel1. specialize (IHfuel1 eq_refl H3 H7 H6). symmetry. assumption.
                     ++ unfold phrases_differ_one in IHfuel2.   rewrite nth_error_cons_succ in H3. rewrite nth_error_cons_succ in H5.
@@ -417,8 +328,63 @@ Module Impl.
   Qed.
 
   Lemma comb (tokens: list Token) :
-    (phrases_differ tokens tokens) ->
+    phrases_differ_one tokens ->
     length (concat (map get_phrase tokens)) >= (length tokens) * (Nat.log2 (length tokens) - 3).
   Proof. Admitted.
+
+  Lemma compress_bound: forall s tokens,
+    compress s = tokens ->
+    length s >= length tokens * (Nat.log2 (length tokens) - 3).
+  Proof.
+    unfold compress.
+    intros * Hc.
+    rewrite (compress'_eq_concat_phrases (length s) s empty_dict tokens
+               ltac:(lia) ltac:(unfold empty_dict; now simpl) Hc).
+    apply comb.
+    pose proof (compress'_phrases_differ (length s) empty_dict s tokens []) as Hpd.
+    unfold empty_dict, agreement in *.
+    assert ((forall index phr next,
+               In (Tok index phr next) [] -> In (phr ++ [next]) [[]])). {
+     intros. now simpl in Hpd.
+   }
+    specialize (Hpd ltac:(lia) Hc ltac:(assumption) ltac:(now simpl)).
+    tauto.
+  Qed.
+
+  Theorem compress_to_bits_bound: forall s,
+    length (compress_to_bits s) <= length s + 10 * length s / Nat.log2 (length s).
+  Proof.
+    unfold compress_to_bits, compress, tokens_to_bits.
+    intros.
+    pose proof (compress_bound s (compress s) ltac:(reflexivity)).
+    set (n := length (compress s)).
+    set (rhs := n * (Nat.log2 n - 3)).
+    etransitivity.
+    2: {
+      assert (rhs + 10 * rhs / Nat.log2 rhs <= length s + 10 * length s / Nat.log2 (length s)). {
+        (* True for rhs >= 3 by monotonicity of x/log2(x) *)
+        admit.
+      }
+      eassumption.
+    }
+    unfold compress, num_bits_for_dict in *.
+    pose proof (tokens_to_bits'_length_bound (compress' (length s) empty_dict s) 1
+                 (1 + length (compress' (length s) empty_dict s)) ltac:(lia)).
+    etransitivity.
+    - eassumption.
+    - unfold num_bits_for_dict.
+      destruct (1 + length (compress' (length s) empty_dict s) <=? 1) eqn:?.
+      + admit. (* True since length (compress' ...) = 0 *)
+      + assert ((1 + length (compress' (length s) empty_dict s) - 1) = length (compress' (length s) empty_dict s)) by lia.
+        rewrite H1.
+        subst n rhs.
+        set (n := length (compress' (length s) empty_dict s)).
+        (*
+          n (log2(n) + 2)
+           == n (log2(n) - 3) + 10 (n log2(n)) / (log2(n^2))
+     for n large enough (~10 works from plots):
+           <= n (log2(n) - 3) + 10 (n (log2(n) - 3)) / (log2(n (log2(n) - 3)))
+        *)
+  Admitted.
 
 End Impl.
