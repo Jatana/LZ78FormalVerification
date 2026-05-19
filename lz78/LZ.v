@@ -416,9 +416,206 @@ Module Impl.
                        specialize (IHfuel2 i j t1 t2 ltac:(lia) H3 H5 H6 H7). assumption.
   Qed.
 
+  Definition different (l : list (list bool)) := forall i j a b,
+  i <> j -> nth_error l i = Some a -> nth_error l j = Some b -> a <> b.
+  
+  Definition equal_len_n (n : nat) (l : list bool) := if (length l =? n) then 1 else 0.
+
+  Definition equal_or_less_len_n (n : nat) (l : list bool) := if (length l <=? n) then 1 else 0.
+
+  Definition amount_geq_n (l : list nat) (n : nat) := list_sum (map (fun x => if (x <? n) then 0 else 1) l).
+
+  Fixpoint gen_array (n : nat) := match n with
+    | 0 => []
+    | S x => S x :: (gen_array x)
+    end.
+
+  Lemma comb1 : forall l n,
+    (different l) -> list_sum (map (equal_len_n n) l) <= 2^n.
+
+  Lemma comb2 : forall l n,
+    (different l) -> list_sum (map (equal_or_less_len_n n) l) <= 2^(n + 1) - 1.
+
+  Lemma comb3 : forall l n, list_sum (map (amount_geq_n l) (gen_array n)) <= list_sum l.
+
+  Print filter.
+
+  Print partition.
+
+  Search partition.
+
+  Search filter.
+
+  Compute (Nat.log2 3).
+
+
+  Lemma comb_diff : forall a l,
+    different (a :: l) -> different l.
+  Proof.
+    intros.
+    unfold different. intros. unfold different in H. specialize (H (S i) (S j) (a0) (b) ltac:(lia) H1 H2). assumption.
+  Qed.
+
+  Lemma comb_diff_add : forall a b l,
+    different (a :: l) -> In b l -> a <> b.
+  Proof.
+    intros.
+    Search (nth_error). specialize (In_nth_error _ _ H0) as Hin. destruct Hin as (n & Hin).
+    unfold different in H. specialize (H 0 (S n) a b ltac:(lia) ltac:(constructor)). simpl in H. specialize (H Hin). assumption.
+  Qed.  
+
+  Lemma comb_partition : forall l f l1 l2,
+    partition f l = (l1, l2) -> different l -> different l1 /\ different l2.
+  Proof.
+    induction l.
+      - intros. unfold different. inversion H. subst. split; intros; rewrite nth_error_nil in H2; inversion H2.
+      - intros. simpl in H. destruct (f a) eqn:Hfa. 
+        * destruct (partition f l) eqn:Hp. inversion H. subst. clear H. specialize (IHl f l0 l2 Hp). assert (different l). eapply comb_diff. exact H0.
+          specialize (IHl H). split. 2: { destruct IHl as (_ & IHl). assumption. }
+          unfold different. intros. destruct i. destruct j.
+            + auto. 
+            + simpl in H3. Search nth_error. specialize (nth_error_In _ _ H3) as Hin. Search partition. assert (In b l). eapply elements_in_partition. exact Hp. apply or_introl. exact Hin.
+              simpl in H2. inversion H2. subst. clear H2. eapply comb_diff_add. exact H0. exact H4.
+            + destruct j.
+              -- simpl in H3. inversion H3. clear H3. subst. simpl in H2. specialize (nth_error_In _ _ H2) as Hin.    
+                 assert (In a0 l). eapply elements_in_partition. exact Hp. apply or_introl. assumption. 
+                 symmetry. eapply comb_diff_add. exact H0. exact H3.
+              -- simpl in H2. simpl in H3. destruct IHl as (IHl & _). eapply IHl. assert (i <> j). lia. exact H4.
+                 exact H2. exact H3.
+        * destruct (partition f l) eqn:Hp. inversion H. subst. clear H. specialize (IHl f l1 l3 Hp). assert (different l). eapply comb_diff. exact H0.
+          specialize (IHl H). split. destruct IHl as (IHl & _). assumption.
+          unfold different. intros. destruct i. destruct j.
+            + auto. 
+            + simpl in H3. Search nth_error. specialize (nth_error_In _ _ H3) as Hin. Search partition. assert (In b l). eapply elements_in_partition. exact Hp. apply or_intror. exact Hin.
+              simpl in H2. inversion H2. subst. clear H2. eapply comb_diff_add. exact H0. exact H4.
+            + destruct j.
+              -- simpl in H3. inversion H3. clear H3. subst. simpl in H2. specialize (nth_error_In _ _ H2) as Hin.    
+                 assert (In a0 l). eapply elements_in_partition. exact Hp. apply or_intror. assumption. 
+                 symmetry. eapply comb_diff_add. exact H0. exact H3.
+              -- simpl in H2. simpl in H3. destruct IHl as (_ & IHl). eapply IHl. assert (i <> j). lia. exact H4.
+                 exact H2. exact H3.
+  Qed.
+
+  Definition split_func (l : list bool) := match l with 
+    | true :: lst => true
+    | false :: lst => false
+    | _ => true
+    end.
+
+  Definition drop_first (l : list bool) := match l with
+    | _ :: y => y
+    | _ => []
+  end.
+
+  Lemma partition_forall: forall (l : list (list bool)) f p l1 l2,
+    partition f l = (l1, l2) -> Forall p l -> Forall p l1 /\ Forall p l2.
+  Proof.
+    intros. split.
+      - eapply Forall_forall. intros. assert (In x l). Search partition. eapply elements_in_partition. exact H. apply or_introl. exact H1.
+        Search Forall. eapply Forall_forall. exact H0. exact H2.
+      - eapply Forall_forall. intros. assert (In x l). Search partition. eapply elements_in_partition. exact H. apply or_intror. exact H1.
+        Search Forall. eapply Forall_forall. exact H0. exact H2.
+  Qed.
+
+  Lemma length_dec : forall l k l1,
+    Forall (fun x : list bool => length x = S k) l ->
+    l1 = (map drop_first l) -> Forall (fun x : list bool => length x = k) l1.
+  Proof.
+    induction l.
+      - intros. subst. constructor.
+      - intros. subst. constructor.
+        + inversion H. subst. destruct a. simpl in H2. lia. simpl in H2. unfold drop_first. lia.
+        + eapply IHl. inversion H. subst. exact H3. reflexivity.
+  Qed.
+
+  Lemma diff_preserv : forall l (b : bool) l1,
+    different l -> Forall (fun x => match x with
+    | s :: _ => b = s
+    | _ => False
+    end) l -> l1 = (map drop_first l) -> different l1.
+  Proof.
+    intros. unfold different. intros. unfold different in H. specialize (H i j (b :: a) (b :: b0) H2).
+    Search (nth_error (map _ _)). remember (nth_error l i) as x. specialize (nth_error_map (drop_first) i l) as Hnth1.
+    subst. destruct (nth_error l i) eqn:Hd1. 2: { simpl in Hnth1. rewrite H3 in Hnth1. inversion Hnth1. }
+    simpl in Hnth1. rewrite H3 in Hnth1. inversion Hnth1. subst. Search (nth_error). specialize (nth_error_In _ _ Hd1) as Hin.
+    specialize (Forall_forall (fun x : list bool => match x with
+| [] => False
+| s :: _ => b = s
+end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destruct l0. simpl. auto. simpl in H. subst. specialize (H eq_refl).
+
+  remember (nth_error l j) as y. specialize (nth_error_map (drop_first) j l) as Hnth2.
+      subst. destruct (nth_error l j) eqn:Hd2. 2: { simpl in Hnth2. rewrite H4 in Hnth2. inversion Hnth2. }
+      simpl in Hnth2. rewrite H4 in Hnth2. inversion Hnth2. subst. Search (nth_error). specialize (nth_error_In _ _ Hd2) as Hin2.
+      specialize (Forall_forall (fun x : list bool => match x with
+  | [] => False
+  | s :: _ => b1 = s
+  end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l1 Hin2). destruct l1. simpl. auto. simpl in H. subst. specialize (H eq_refl).
+    
+     simpl. unfold "<>". intros. subst. auto.
+  Qed.
+
+
+  Print Forall.
+  Lemma comb4 : forall k (l : list (list bool)), Forall (fun x => length x = k) l -> different l -> length l <= 2^k.
+  Proof.
+    induction k.
+      - intros. change (2^0) with 1. destruct l. simpl. lia. simpl. inversion H. subst.
+        destruct l0. simpl. lia. unfold different in H0. inversion H4. subst. destruct l. 2 : { simpl in H3. lia. }
+        destruct l0. 2: { simpl in H5. lia. } simpl. specialize (H0 0 1 [] [] ltac:(lia) ltac:(constructor) ltac:(constructor)).
+        exfalso. eapply H0. reflexivity.
+      - intros. destruct (partition split_func l) as [l1 l2] eqn:Hspl. 
+        Search partition.
+        specialize (partition_as_filter split_func l) as Hfilt. Search Forall. assert ((Forall (fun x : list bool => length x = S k) l1) /\ (Forall (fun x : list bool => length x = S k) l2)) as Hlen.
+        eapply partition_forall. exact Hspl. exact H. 
+        remember (map (fun x => match x with
+          | _ :: y => y
+          | _ => []
+        end) l1) as l1' eqn:Hr1. 
+        remember (map (fun x => match x with
+          | _ :: y => y
+          | _ => []
+        end) l2) as l2' eqn:Hr2.
+        specialize (IHk l1') as IHk1.
+        specialize (IHk l2') as IHk2.
+        destruct Hlen as (Hlen1 & Hlen2).
+        assert (Forall (fun x : list bool => length x = k) l1'). eapply length_dec. exact Hlen1. exact Hr1.
+        specialize (IHk1 H1). clear H1.
+        assert (Forall (fun x : list bool => length x = k) l2'). eapply length_dec. exact Hlen2. exact Hr2.
+        specialize (IHk2 H1). clear H1.
+
+        Search filter. specialize (filter_In split_func) as Hfin1. specialize (Hfin1) with (l := l). 
+        rewrite Hspl in Hfilt. inversion Hfilt. clear Hfilt.
+
+        specialize (comb_partition _ _ _ _ Hspl H0) as Hdiff. destruct Hdiff as (Hdiff1 & Hdiff2).
+        assert (different l1'). eapply diff_preserv with (b := true). exact Hdiff1. apply Forall_forall. intros. rewrite <- H2 in Hfin1. 
+        specialize (Hfin1 x). destruct (Hfin1) as (Hfin11 & _). specialize (Hfin11 H1). destruct Hfin11 as (Hin3 & Hspltrue).
+        unfold split_func in Hspltrue. destruct x. 
+          ++ specialize (Forall_forall (fun x : list bool => length x = S k) l1) as Hfor3. destruct Hfor3 as (Hfor3 & _).
+             specialize (Hfor3 Hlen1 [] H1). simpl in Hfor3. lia.
+          ++ destruct b. auto. symmetry. assumption.
+          ++ exact Hr1.
+          ++ specialize (IHk1 H1).
+
+        specialize (filter_In (fun x : list bool => negb (split_func x))) as Hfin2. specialize (Hfin2) with (l := l). 
+
+        assert (different l2'). eapply diff_preserv with (b := false). exact Hdiff2. apply Forall_forall. intros. rewrite <- H3 in Hfin2. 
+        specialize (Hfin2 x). destruct (Hfin2) as (Hfin11 & _). specialize (Hfin11 H4). destruct Hfin11 as (Hin3 & Hspltrue).
+        unfold split_func in Hspltrue. destruct x.
+          ** simpl in Hspltrue. inversion Hspltrue. 
+          ** destruct b. simpl in Hspltrue. inversion Hspltrue. reflexivity.
+          ** exact Hr2. 
+          ** specialize (IHk2 H4). Search partition. specialize (partition_length split_func l Hspl) as Hpartlen. 
+             Search (length (map _ _) = length _). assert (length l1' = length l1). rewrite Hr1. eapply length_map. 
+             assert (length l2' = length l2). rewrite Hr2. eapply length_map.
+             Search (_ ^ (S _)). rewrite Nat.pow_succ_r'. lia.
+  Qed.
+
+
   Lemma comb (tokens: list Token) :
-    (phrases_differ tokens tokens) ->
-    length (concat (map get_phrase tokens)) >= (length tokens) * (Nat.log2 (length tokens) - 3).
-  Proof. Admitted.
+    (phrases_differ_one tokens) ->
+    length (concat (map get_phrase tokens)) >= (length tokens) * (Nat.log2 (length tokens) - 10 * (Nat.log2 (Nat.log2 (length tokens))) - 10).
+  Proof. 
+
+  Admitted.
 
 End Impl.
