@@ -332,7 +332,7 @@ Module Impl.
   
   Definition equal_len_n (n : nat) (l : list bool) := if (length l =? n) then 1 else 0.
 
-  Definition equal_or_less_len_n (n : nat) (l : list bool) := if (length l <=? n) then 1 else 0.
+  Definition equal_or_less_len_n (n : nat) (l : list bool) := (length l <=? n).
 
   Definition amount_geq_n (l : list nat) (n : nat) := list_sum (map (fun x => if (x <? n) then 0 else 1) l).
 
@@ -344,8 +344,6 @@ Module Impl.
   Lemma comb1 : forall l n,
     (different l) -> list_sum (map (equal_len_n n) l) <= 2^n.
 
-  Lemma comb2 : forall l n,
-    (different l) -> list_sum (map (equal_or_less_len_n n) l) <= 2^(n + 1) - 1.
 
   Lemma comb3 : forall l n, list_sum (map (amount_geq_n l) (gen_array n)) <= list_sum l.
 
@@ -406,6 +404,14 @@ Module Impl.
               -- simpl in H2. simpl in H3. destruct IHl as (_ & IHl). eapply IHl. assert (i <> j). lia. exact H4.
                  exact H2. exact H3.
   Qed.
+
+  Lemma filter_preserv_diff : forall l f,
+    different l -> different (filter f l).
+  Proof.
+    intros. Search filter. destruct (partition f l) eqn:Hp. specialize (comb_partition _ _ _ _ Hp H) as Hpart.
+    Search partition. specialize (partition_as_filter f l) as H3. rewrite H3 in Hp. inversion Hp.
+    rewrite H1. destruct Hpart as (Hpart & _). assumption.
+  Qed. 
 
   Definition split_func (l : list bool) := match l with 
     | true :: lst => true
@@ -521,6 +527,95 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
              Search (_ ^ (S _)). rewrite Nat.pow_succ_r'. lia.
   Qed.
 
+  Search filter.
+
+  Lemma filter_filter_length {A : Type} : forall (f : A -> bool) l,
+   length (filter f (filter f l)) = length (filter f l).
+  Proof.
+    intros.
+    specialize (filter_length f (filter f l)) as H.
+    assert (length (filter (fun x : A => negb (f x)) (filter f l)) = 0).
+    2 : {
+      lia.
+    }
+    destruct (filter (fun x : A => negb (f x)) (filter f l)) eqn:Hd.
+    simpl. lia.
+    specialize (filter_In (fun x : A => negb (f x)) a (filter f l)) as (Hfin1 & _).
+    rewrite Hd in Hfin1. simpl in Hfin1. specialize (Hfin1 ltac:(apply or_introl;reflexivity)).
+    specialize (filter_In f a l) as (Hfin2 & _).
+    destruct Hfin1 as (Ha & Hb).
+    specialize (Hfin2 Ha).
+    destruct Hfin2 as (_ & Hc).
+    rewrite Hc in Hb.
+    simpl in Hb.
+    inversion Hb.
+  Qed.
+
+  Lemma comb2 : forall n l,
+    (different l) -> length (filter (equal_or_less_len_n n) l) <= 2^(n + 1) - 1.
+  Proof.
+    induction n.
+      - intros. change (2 ^ (0 + 1) - 1) with (2^0). eapply comb4.
+          * eapply Forall_forall. intros. Search filter. specialize (filter_In (equal_or_less_len_n 0) x l) as Hin.
+            destruct Hin as (Hin1 & _). specialize (Hin1 H0). destruct Hin1 as (_ & Hin1).
+            unfold equal_or_less_len_n in Hin1. destruct x. simpl. reflexivity.
+            simpl in Hin1. inversion Hin1.
+          * eapply filter_preserv_diff. assumption.
+      - intros.  destruct (partition (equal_or_less_len_n n) (filter (equal_or_less_len_n (S n)) l)) eqn:Hp.
+        specialize (IHn l0). assert (different (filter (equal_or_less_len_n (S n)) l)). {
+          eapply filter_preserv_diff. assumption.
+        }
+        specialize (comb_partition _ _ _ _ Hp H0) as Hpart.
+        destruct Hpart as (Hpart1 & Hpart2).
+        specialize (IHn Hpart1).
+        specialize (comb4 (S n) l1 ) as Hexact.
+        assert (Forall (fun x : list bool => length x = S n) l1). {
+          eapply Forall_forall.
+          intros.
+          Search partition. 
+          assert (Forall (fun x => length x <= S n) (filter (equal_or_less_len_n (S n)) l) ). {
+              eapply Forall_forall. intros.  Search filter. specialize (filter_In (equal_or_less_len_n (S n)) x0 l) as Hfin.
+              destruct Hfin as (Hfin1 & _). specialize (Hfin1 H2).
+              destruct Hfin1 as (_ & Hfin1). unfold equal_or_less_len_n in Hfin1.
+              Search ((_ <=? _) = true). eapply leb_complete. assumption.
+            }
+            specialize (partition_forall (filter (equal_or_less_len_n (S n)) l) (equal_or_less_len_n n) (fun x : list bool => length x <= S n)) as Hpart_prop.
+            specialize (Hpart_prop l0 l1 Hp H2).
+            Search partition.
+            specialize (partition_as_filter (equal_or_less_len_n n) (filter (equal_or_less_len_n (S n)) l)) as Hfilt.
+            rewrite Hfilt in Hp.
+            inversion Hp.
+            Search filter.
+            clear Hfilt.
+            specialize (filter_In (fun x : list bool => negb (equal_or_less_len_n n x)) x (filter (equal_or_less_len_n (S n)) l)) as Hin.
+            destruct Hin as (Hin1 & _).
+            rewrite H5 in Hin1. specialize (Hin1 H1).
+            destruct Hin1 as (_ & Hin1).
+            Search (negb _ = true). rewrite Bool.negb_true_iff in Hin1.
+            unfold equal_or_less_len_n in Hin1.
+            Search ((_ <=? _) = false).
+            specialize (leb_complete_conv _ _ Hin1) as Hless.
+            destruct Hpart_prop as (Hpart_prop1 & Hpart_prop2).
+            rewrite Forall_forall in Hpart_prop2.
+            specialize (Hpart_prop2 x H1). lia.
+        }
+    specialize (Hexact H1 Hpart2).
+    Search partition.
+    specialize (partition_length _ _ Hp) as Hlen.
+    rewrite Hlen.
+    Search (_ ^ _). replace (S n + 1) with (S (S n)) by lia. rewrite Nat.pow_succ_r'.
+    specialize (partition_as_filter (equal_or_less_len_n n) (filter (equal_or_less_len_n (S n)) l)) as Hfilt.
+    rewrite Hp in Hfilt. inversion Hfilt. rewrite <- H4. rewrite <- H3. clear H4 Hfilt.
+    Search filter.
+    rewrite H3 in IHn.
+    rewrite filter_filter_length in IHn.
+    rewrite <- H3 in IHn.
+    rewrite Nat.pow_succ_r'.
+    replace (n + 1) with (S n) in IHn by lia.
+    rewrite Nat.pow_succ_r' in IHn.
+    rewrite Nat.pow_succ_r' in Hexact.
+    lia.
+  Qed.
 
   Lemma comb (tokens: list Token) :
     (phrases_differ_one tokens) ->
