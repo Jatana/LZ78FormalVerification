@@ -341,23 +341,6 @@ Module Impl.
     | S x => S x :: (gen_array x)
     end.
 
-  Lemma comb1 : forall l n,
-    (different l) -> list_sum (map (equal_len_n n) l) <= 2^n.
-
-
-  Lemma comb3 : forall l n, list_sum (map (amount_geq_n l) (gen_array n)) <= list_sum l.
-
-  Print filter.
-
-  Print partition.
-
-  Search partition.
-
-  Search filter.
-
-  Compute (Nat.log2 3).
-
-
   Lemma comb_diff : forall a l,
     different (a :: l) -> different l.
   Proof.
@@ -617,30 +600,615 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
     lia.
   Qed.
 
+  Definition equal_or_greater_len_n (n : nat) (l : list bool) :=
+    n <=? length l.
+
+  Lemma diff_lb : forall n l,
+    (different l) -> length (filter (equal_or_greater_len_n n) l) >= length l + 1 - 2^(n).
+  Proof.
+    intros.
+    destruct n.
+      - replace (2^0) with 1. 2: { Search (_ ^ 0). rewrite Nat.pow_0_r. reflexivity. }
+        replace (length l + 1 - 1) with (length l) by lia.
+        Search filter. specialize (filter_length (equal_or_greater_len_n 0) l) as Hflt.
+        destruct (filter (fun x : list bool => negb (equal_or_greater_len_n 0 x))) eqn:Hd.
+        simpl in Hd. simpl in Hflt. lia.
+        Search filter. 
+        specialize (filter_In (fun x : list bool => negb (equal_or_greater_len_n 0 x)) l0 l) as Hin. 
+        destruct Hin as (Hin1 & _).
+        rewrite Hd in Hin1.
+        simpl in Hin1. specialize (Hin1 ltac:(apply or_introl;reflexivity)).
+        destruct Hin1 as (_ & Hin1). inversion Hin1.
+      - destruct (partition (equal_or_greater_len_n (S n)) l) eqn:Hd.
+        specialize (partition_as_filter (equal_or_greater_len_n (S n)) l) as Hfilt.
+        Search filter.
+        specialize (filter_ext (fun x : list bool => negb (equal_or_greater_len_n (S n) x)) (equal_or_less_len_n n)) as Hext.
+        assert ((forall a : list bool, (fun x : list bool => negb (equal_or_greater_len_n (S n) x)) a = equal_or_less_len_n n a)). {
+          intros. unfold equal_or_greater_len_n. unfold equal_or_less_len_n.
+          Search (negb (_ <=? _)).
+          rewrite <- Nat.ltb_antisym.
+          Search (_ <? _). destruct ((length a <? S n)) eqn:Hdd.
+          Search (_ <? _ = true).
+          rewrite Nat.ltb_lt in Hdd.
+          symmetry. Search (_ <=? _). rewrite Nat.leb_le. lia.
+          Search (_ <? _ = false). rewrite Nat.ltb_ge in Hdd.
+          symmetry. Search (_ <=? _). rewrite leb_iff_conv.
+          lia.
+        }
+        specialize (Hext H0). clear H0.
+        specialize (Hext l).
+        specialize (comb2 n l H) as Hdiff.
+        specialize (partition_length (equal_or_greater_len_n (S n)) l Hfilt) as Hlen.
+        rewrite Hext in Hlen.
+        rewrite Hlen.
+        Search (_ <= _ -> _ <= _ -> _ <= _).
+        replace (S n) with (n + 1). 2: { lia. }
+        assert (2^(n + 1) >= 2). {
+          replace (n + 1) with (S n). 2: { lia. }
+          Search (_ ^ _). rewrite Nat.pow_succ_r'. Search (_ ^ _). 
+          specialize (Nat.pow_lt_mono_r 2 0 n (ltac:(lia))) as HH.
+          destruct n. replace (2^0) with 1. lia. Search (_ ^ 0). rewrite Nat.pow_0_r. reflexivity.
+          specialize (HH ltac:(lia)). rewrite Nat.pow_0_r in HH. lia.
+        }
+        lia.
+  Qed.
+
+  Search list_sum.
+
+  Lemma list_sum_dec : forall f (g : list bool -> nat) l,
+    list_sum (map g (filter f l)) <= list_sum (map g l).
+  Proof.
+    induction l.
+      - simpl. lia.
+      - simpl. destruct (f a).
+        -- simpl. lia.
+        -- simpl. lia.
+  Qed.
+
+  Lemma arith1 : forall a b c,
+    a >= b -> c * a >= c * b.
+  Proof.
+    intros.
+    induction c. lia.
+    lia.
+  Qed.
+
+  Lemma sum_of_at_least_k : forall l k,
+    (forall x, In x l -> (equal_or_greater_len_n k x) = true) -> list_sum (map (@length (bool)) l) >= k * (length l).
+  Proof.
+    intros.
+    induction l.
+      - intros. simpl. lia.
+      - intros. simpl. assert ((forall x : list bool, In x l -> equal_or_greater_len_n k x = true)).
+        intros. specialize (H x). Search In. 
+        simpl in H. specialize (H ltac:(apply or_intror;assumption)).
+        assumption.
+        specialize (IHl H0). specialize (H a). simpl in H. specialize (H ltac:(apply or_introl;reflexivity)).
+        unfold equal_or_greater_len_n in H. Search ((_ <=? _) = true). rewrite Nat.leb_le in H.
+        lia.
+  Qed.
+
+  (* Lemma inequality : forall n,
+    (Nat.log2 n - Nat.log2 (Nat.log2 n)) * (n + 1 - 2 ^ (Nat.log2 n - Nat.log2 (Nat.log2 n))) >=
+n * (Nat.log2 n - 10 * Nat.log2 (Nat.log2 n) - 10).
+  Proof.
+    intros.
+  Admitted. *)
+
+  (* Lemma length_lower_bound (l : list (list bool)) : 
+    different l -> list_sum (map (@length (bool)) l) >= (length l) * (Nat.log2(length l) - 10 * (Nat.log2 (Nat.log2 (length l))) - 10).
+  Proof.
+    remember (length l) as n.
+    intros.
+    specialize (diff_lb (Nat.log2 n - (Nat.log2 (Nat.log2 n))) l H) as Hlb.
+    specialize (list_sum_dec (equal_or_greater_len_n (Nat.log2 n - Nat.log2 (Nat.log2 n))) (@length (bool)) l) as Hdec.
+    assert ((list_sum (map (length (A:=bool)) (filter (equal_or_greater_len_n (Nat.log2 n - Nat.log2 (Nat.log2 n))) l))) >= n * (Nat.log2 n - 10 * Nat.log2 (Nat.log2 n) - 10)).
+    2 : {
+      lia.
+    }
+    clear Hdec.
+    remember (filter (equal_or_greater_len_n (Nat.log2 n - Nat.log2 (Nat.log2 n))) l) as l'.
+    Search filter.
+    specialize (filter_In (equal_or_greater_len_n (Nat.log2 n - Nat.log2 (Nat.log2 n)))) as Hin.
+    specialize Hin with (l := l).
+    rewrite <- Heql' in Hin.
+    clear Heql'.
+    specialize (sum_of_at_least_k l' (Nat.log2 n - Nat.log2 (Nat.log2 n))) as sumk.
+    assert ((forall x : list bool, In x l' -> equal_or_greater_len_n (Nat.log2 n - Nat.log2 (Nat.log2 n)) x = true)).
+    intros. specialize (Hin x).
+    destruct (Hin) as (Hin1 & _).
+    specialize (Hin1 H0).
+    destruct Hin1 as (_ & Hin2).
+    assumption.
+    specialize (sumk H0).
+    clear H0.
+
+    assert ((Nat.log2 n - Nat.log2 (Nat.log2 n)) * length l' >= n * (Nat.log2 n - 10 * Nat.log2 (Nat.log2 n) - 10)). 2: { lia. }
+
+    assert ((Nat.log2 n -  Nat.log2 (Nat.log2 n)) * (length l') >= (Nat.log2 n - Nat.log2 (Nat.log2 (n))) * (length l + 1 - 2 ^ (Nat.log2 n - Nat.log2 (Nat.log2 n)))).
+    Search (_ * _ <= _ * _).
+    Search (_ >= _ <-> _ <= _).
+    eapply arith1. assumption.
+    assert ((Nat.log2 n - Nat.log2 (Nat.log2 n)) * (length l + 1 - 2 ^ (Nat.log2 n - Nat.log2 (Nat.log2 n))) >= n * (Nat.log2 n - 10 * Nat.log2 (Nat.log2 n) - 10)).
+    2 : { lia. }
+    rewrite <- Heqn.
+    clear. 
+    apply inequality.
+  Qed. *)
+    (* Search (_ ^ (_ - _)).
+    erewrite Nat.pow_sub_r. 2: { lia. }
+    2 : {
+     Search Nat.log2. eapply Nat.log2_le_lin. lia.
+    }
+    Search (2 ^ (Nat.log2 _)).
+    specialize (Nat.log2_spec n) as H. destruct n.
+    simpl. lia.
+    specialize (H ltac:(lia)). destruct H as (H1 & H2).
+    
+  Admitted. *)
+
+  Definition shift (f : nat -> nat) := fun x => f (x + 1).
+
+  Fixpoint sum_over (f : nat -> nat) (n : nat) := match n with 
+  | 0 => 0
+  | S m => (f 0) + (sum_over (shift f) m)
+  end.
+
+  Lemma sum_row_sum_col : forall (n m : nat) (f : nat -> nat -> nat),
+    sum_over (fun i => sum_over (f i) m) n = sum_over (fun j => sum_over (fun x => f x j) n) m.
+  Proof.
+    induction n.
+      - intros.
+        simpl. induction m.
+          -- simpl. lia.
+          -- simpl. assumption.
+      - induction m.
+          * simpl.
+          clear IHn. induction n.
+            + simpl. lia.
+            + simpl. assumption.
+          * simpl. Search (_ = _ -> _ + _ = _ + _).
+
+          assert (sum_add : forall k (g1 g2 : nat -> nat), 
+            sum_over (fun i => g1 i + g2 i) k = sum_over g1 k + sum_over g2 k). {
+            induction k. intros g1 g2.
+            - simpl. lia.
+            - simpl. unfold shift. simpl. intros. rewrite IHk. lia.
+          }
+          
+          repeat rewrite sum_add in *.
+          unfold shift.
+          intros.
+          repeat rewrite sum_add.
+          rewrite (IHn m (fun x y => f (x + 1) (y + 1))).
+          lia.
+  Qed.
+
+  Lemma sum_over_fg : forall m g1 g2,
+    (forall x, (g1 x) = (g2 x)) -> sum_over g1 m = sum_over g2 m.
+  Proof.
+    induction m.
+      - intros. simpl. reflexivity.
+      - intros. simpl. rewrite H. erewrite IHm. reflexivity.
+        intros. unfold shift. erewrite H. reflexivity.
+  Qed.
+
+  Lemma sum_over_f_leq_g : forall m g1 g2,
+    (forall x, (g1 x) <= (g2 x)) -> sum_over g1 m <= sum_over g2 m.
+  Proof.
+    induction m.
+      - intros. simpl. reflexivity.
+      - intros. simpl. specialize (H 0) as H0. specialize (IHm (shift g1) (shift g2)).
+        assert ((forall x : nat, shift g1 x <= shift g2 x)).
+        intros. unfold shift. specialize (H (x + 1)) as H1. assumption. specialize (IHm H1). lia.
+  Qed.
+
+  Lemma sum_over_indicator : forall m k l,
+    sum_over (fun j : nat => if j + 1 + l <=? k then 1 else 0) m = (min (k - l) m).
+  Proof.
+    induction m.
+      - intros. simpl. lia.
+      - intros. simpl. unfold shift. erewrite sum_over_fg. 2 : {
+        intros. replace (x + 1 + 1 + l) with (x + 1 + (S l)) by lia. reflexivity.  
+      }
+      erewrite IHm. destruct k. lia. destruct (l <=? k) eqn:Hd.
+        + Search (_ <=? _). rewrite Nat.leb_le in Hd. lia.
+        + Search (_ <=? _). rewrite Nat.leb_gt in Hd. lia.
+  Qed.
+
+  Lemma sum_over_list_sum : forall n l m f,
+  length l = n ->
+    f =
+    (fun i j : nat =>
+    match nth_error l i with
+    | Some x => if j + 1 <=? length x then 1 else 0
+    | None => 0
+    end) ->
+    sum_over (fun i : nat => sum_over (f i) (m)) (length l) <= list_sum (map (@length bool) l).
+  Proof.
+    induction n.
+      - intros. destruct l. simpl. lia.
+        simpl in H. lia.
+      - intros. destruct l.
+        + simpl in H. lia.
+        + simpl in H. Search (S _ = S _). specialize (Nat.succ_inj _ _ H) as Hlen.
+          specialize (IHn l0 m _ Hlen eq_refl). simpl in IHn. simpl. clear H.
+          assert (sum_over (f 0) m <= length l). {
+            rewrite H0. simpl. erewrite  sum_over_fg.
+            2: {
+              intros. replace (x + 1) with (x + 1 + 0) by lia. reflexivity.
+            }
+            erewrite sum_over_indicator. lia.
+          }
+          unfold shift. rewrite H0. simpl. 
+          assert ((sum_over
+(fun i : nat =>
+sum_over
+(fun j : nat =>
+match nth_error l0 i with
+| Some x => if j + 1 <=? length x then 1 else 0
+| None => 0
+end) m) (length l0)) = sum_over
+(fun x : nat =>
+sum_over
+(fun j : nat =>
+match nth_error (l :: l0) (x + 1) with
+| Some x0 => if j + 1 <=? length x0 then 1 else 0
+| None => 0
+end) m) (length l0)).
+          {
+            eapply sum_over_fg.
+            intros.
+            eapply sum_over_fg.
+            intros.
+            replace (x + 1) with (S x) by lia.
+            simpl. reflexivity. 
+          }
+          rewrite <- H1.
+          rewrite H0 in H. simpl in H.
+          lia.
+  Qed.
+
+  Lemma len_filt_sum_over : forall l x f,
+    f = (fun i j : nat =>
+      match nth_error l i with
+      | Some x => if j + 1 <=? length x then 1 else 0
+      | None => 0
+      end) -> length (filter (equal_or_greater_len_n (x + 1)) l) = sum_over (fun x0 : nat => f x0 x) (length l).
+  Proof.
+    induction l.
+      - intros. simpl. reflexivity.
+      - intros. simpl. rewrite H. simpl. unfold equal_or_greater_len_n. destruct (x + 1 <=? length a).
+         + simpl. f_equal. unfold equal_or_greater_len_n in IHl. 
+           specialize (IHl x _ (eq_refl ((fun i j : nat =>
+                        match nth_error (l) i with
+                        | Some x => if j + 1 <=? length x then 1 else 0
+                        | None => 0
+                        end)))).
+                        
+          unfold shift.
+          erewrite sum_over_fg. 2 : {
+              intros. replace (x0 + 1) with (S x0) by lia. simpl. reflexivity.
+            }
+          simpl in IHl. assumption.
+        +  simpl. f_equal. unfold equal_or_greater_len_n in IHl. 
+           specialize (IHl x _ (eq_refl ((fun i j : nat =>
+                        match nth_error (l) i with
+                        | Some x => if j + 1 <=? length x then 1 else 0
+                        | None => 0
+                        end)))).
+                        
+          unfold shift.
+          erewrite sum_over_fg. 2 : {
+              intros. replace (x0 + 1) with (S x0) by lia. simpl. reflexivity.
+            }
+          simpl in IHl. assumption.
+  Qed.
+(* 
+  Lemma easy_uneq : forall k n l,
+    l <= k ->
+    sum_over (fun x : nat => n + 1 - 2^(x + 1 + l)) k >= (n + 1) * (k) - (2^(k + 1) - 2^(l)).
+  Proof.
+    induction k.
+      - intros. lia.
+      - intros. simpl. unfold shift.
+        specialize (IHk n (l + 1)). erewrite sum_over_fg. 2 : {
+          intros. replace (x + 1 + 1 + l) with (x + 1 + (l + 1)) by lia. reflexivity.
+        }
+        assert ((n + 1 - 2 ^ S l) + (n + 1) * k - (2 ^ (k + 1) - 2 ^ (l + 1)) >= (n + 1) * S k - (2 ^ S (k + 1) - 2 ^ l)). 2: { lia. }
+        Search (_ ^ (S _)). rewrite Nat.pow_succ_r'. rewrite Nat.pow_succ_r'.
+        replace (k + 1) with (S k) by lia. replace (l + 1) with (S l) by lia. rewrite Nat.pow_succ_r'. rewrite Nat.pow_succ_r'.
+         *)
+
+
+  Lemma sum_const : forall k c, sum_over (fun _ => c) k = k * c.
+  Proof.
+    induction k. intros c.
+    - simpl. lia.
+    - simpl. unfold shift. intros. rewrite IHk. lia.
+  Qed.
+
+  Lemma sum_sub : forall k f g, 
+    (forall x, x < k -> g x <= f x) ->
+    sum_over (fun x => f x - g x) k + sum_over g k = sum_over f k.
+  Proof.
+    induction k. intros f g H.
+    - simpl. reflexivity.
+    - intros. simpl. 
+      assert (H0: g 0 <= f 0). { apply H. lia. }
+      assert (Hrest: forall x, x < k -> shift g x <= shift f x).
+      { intros x Hx. unfold shift. apply H. lia. }
+      specialize (IHk (shift f) (shift g) Hrest).
+      unfold shift. unfold shift in IHk.
+      lia.
+  Qed.
+
+  Lemma sum_mult_2 : forall k f, sum_over (fun x => 2 * f x) k = 2 * sum_over f k.
+  Proof.
+    induction k. intros f.
+    - simpl. reflexivity.
+    - simpl. unfold shift. intros. rewrite IHk. lia.
+  Qed.
+
+  Lemma sum_pow2 : forall k, sum_over (fun x => 2 ^ (x + 1)) k + 2 = 2 ^ (k + 1).
+  Proof.
+    induction k.
+    - simpl. reflexivity.
+    - simpl. unfold shift. 
+      assert (H: forall x, 2 ^ (x + 1 + 1) = 2 * 2 ^ (x + 1)).
+      { intro x. 
+        replace (x + 1 + 1) with (S (x + 1)) by lia.
+        reflexivity. }
+      rewrite (sum_over_fg k _ _ H).
+      rewrite sum_mult_2.
+      change (2 ^ S (k + 1)) with (2 * 2 ^ (k + 1)).
+      lia.
+  Qed.
+
+
+  Lemma pow2_bound_all : forall n x, x < Nat.log2 n -> 2 ^ (x + 1) <= n + 1.
+  Proof.
+    intros n x Hx.
+    destruct n.
+    - simpl in Hx. change (Nat.log2 0) with 0 in Hx. lia.
+    - assert (H_lt: x + 1 <= Nat.log2 (S n)) by lia.
+      assert (H_pow: 2 ^ (x + 1) <= 2 ^ Nat.log2 (S n)).
+      { apply Nat.pow_le_mono_r; lia. }
+      pose proof (Nat.log2_spec (S n)) as Hlog.
+      assert (0 < S n) by lia.
+      specialize (Hlog H).
+      lia.
+  Qed.
+
+  Theorem main_sum : forall n : nat,
+    sum_over (fun x : nat => n + 1 - 2 ^ (x + 1)) (Nat.log2 n) >= n * (Nat.log2 n - 2).
+  Proof.
+    intro n.
+    remember (Nat.log2 n) as k.
+    
+    assert (Hbound: forall x, x < k -> 2 ^ (x + 1) <= n + 1). {
+      intros x Hx. subst k. apply pow2_bound_all. exact Hx.
+    }
+    
+    pose proof (sum_sub k (fun _ => n + 1) (fun x => 2 ^ (x + 1)) Hbound) as Hsub.
+    rewrite sum_const in Hsub.
+    pose proof (sum_pow2 k) as Hpow2.
+    
+    assert (H2n: 2 ^ (k + 1) <= 2 * n + 2). {
+      subst k.
+      destruct n.
+      - simpl. change (2 ^ 1) with 2. lia.
+      - pose proof (Nat.log2_spec (S n)) as Hlog.
+        assert (0 < S n) by lia.
+        specialize (Hlog H).
+        replace (Nat.log2 (S n) + 1) with (S (Nat.log2 (S n))) by lia.
+        simpl. Search (_ ^ (S _)). rewrite Nat.pow_succ_r'. lia.
+    }
+    lia. 
+  Qed.
+
+  Lemma corr_lb : forall l,
+    different l -> list_sum (map (@length (bool)) l) >= (length l) * (Nat.log2(length l) - 2).
+  Proof.
+    intros.
+    remember (fun i j => match (nth_error l i) with
+      | None => 0
+      | Some x => if (j + 1 <=? length x) then 1 else 0
+    end) as f.
+    (* specialize (sum_row_sum_col (length l) (Nat.log2(length l)) f) as Hsum. *)
+    specialize (sum_over_list_sum (length l) l (Nat.log2 (length l)) f eq_refl Heqf) as Hsum.
+    assert ((sum_over (fun i : nat => sum_over (f i) (Nat.log2 (length l))) (length l)) >= length l * (Nat.log2 (length l) - 2)). 2: { lia. }
+    erewrite sum_row_sum_col. remember (length l) as n. specialize (sum_over_f_leq_g (Nat.log2 n) (fun x => n + 1 - 2^(x + 1)) (fun j : nat => sum_over (fun x : nat => f x j) n)) as Hflg. 
+    assert ((forall x : nat,
+(fun x0 : nat => n + 1 - 2 ^ (x0 + 1)) x <=
+(fun j : nat => sum_over (fun x0 : nat => f x0 j) n) x)). {
+      intros. specialize (diff_lb (x + 1) l H) as Hdifflb. assert (length (filter (equal_or_greater_len_n (x + 1)) l) = sum_over (fun x0 : nat => f x0 x) n). 2: { lia. }
+      erewrite len_filt_sum_over. rewrite Heqn. reflexivity. exact Heqf.
+    }
+    specialize (Hflg H0). assert (sum_over (fun x : nat => n + 1 - 2 ^ (x + 1)) (Nat.log2 n) >= n * (Nat.log2 n - 2)). 2: { lia. }
+    clear.
+
+    eapply main_sum.
+  Qed.
+
+  Lemma ind_bound {A : Type} : forall (l : list A) i x,
+    nth_error l i = Some x -> i < length l.
+  Proof.
+    induction l.
+      - intros. simpl. destruct i. simpl in H. inversion H. simpl in H. inversion H.
+      - intros. destruct i. simpl. lia.
+        simpl. simpl in H. specialize (IHl i x H). lia.
+  Qed.      
+
   Lemma comb (tokens: list Token) :
+    (forall ind phr, In (Last ind phr) tokens -> False) ->
     (phrases_differ_one tokens) ->
-    length (concat (map get_phrase tokens)) >= (length tokens) * (Nat.log2 (length tokens) - 10 * (Nat.log2 (Nat.log2 (length tokens))) - 10).
-  Proof. 
+    length (concat (map get_phrase tokens)) >= (length tokens) * (Nat.log2 (length tokens) - 2).
+  Proof.
+    intros. remember (map (get_phrase) tokens) as l.
+    assert (different l). {
+      unfold different. intros. unfold phrases_differ_one in H0. 
 
-  Admitted.
+      specialize (ind_bound _ _ _ H2) as Hi.
+      specialize (ind_bound _ _ _ H3) as Hj.
 
+      Search (length (map _ _ ) = length (_)).
+      specialize (length_map (get_phrase) tokens) as Hmapl.
+      rewrite <- Heql in Hmapl.
+      assert (i < length tokens) by lia.
+      assert (j < length tokens) by lia.
+
+      Search (nth_error). specialize (@nth_error_nth' Token tokens i (Last 0 []) H4) as Hit. 
+      specialize (@nth_error_nth' Token tokens j (Last 0 []) H5) as Hjt.
+
+      specialize (H0 i j _ _ H1 Hit Hjt).
+      assert (not_last (nth i tokens (Last 0 []))). {
+        unfold not_last.
+        destruct (nth i tokens (Last 0 [])) eqn:hd.
+        auto.
+        specialize (nth_error_In _ _ Hit) as Hin.
+        specialize (H _ _ Hin).
+        assumption.
+      }
+
+      assert (not_last (nth j tokens (Last 0 []))). {
+        unfold not_last.
+        destruct (nth j tokens (Last 0 [])) eqn:hd.
+        auto.
+        specialize (nth_error_In _ _ Hjt) as Hjn.
+        specialize (H _ _ Hjn).
+        assumption.
+      }
+
+      specialize (H0 H6 H7).
+    
+      (* Search (nth_error). specialize (@nth_error_nth Token tokens i (nth i tokens (Last 0 [])) (Last 0 []) Hit) as Hnth. *)
+      Search map.
+
+      specialize (map_nth_error get_phrase i tokens Hit) as Hmap.
+      rewrite Heql in H2.
+      rewrite H2 in Hmap.
+      inversion Hmap. clear Hmap.
+
+      specialize (map_nth_error get_phrase j tokens Hjt) as Hmap2.
+      rewrite Heql in H3.
+      rewrite H3 in Hmap2.
+      inversion Hmap2. clear Hmap2.
+      assumption.
+    }
+    specialize (corr_lb l H1) as Hcor.
+    Search (length (concat _)). rewrite length_concat. erewrite <- length_map. rewrite <- Heql. assumption. 
+  Qed.
+
+  Lemma all_but_last' : forall fuel dict s tokens,
+    compress' fuel dict s = tokens ->
+    (forall ind phr, In (Last ind phr) (removelast tokens) -> False).
+  Proof.
+    induction fuel. 
+      - intros. simpl in H. subst. simpl in H0. assumption.
+      - intros. simpl in H. destruct s.
+          + subst. simpl in H0. assumption.
+          + destruct (find_largest_prefix dict (b :: s)).
+            destruct (skipn n0 (b :: s)).
+              * subst. simpl in H0. assumption.
+              * subst. simpl in H0. destruct (compress' fuel (dict ++ [firstn n0 (b :: s) ++ [b0]]) l) eqn:Hd.
+                -- simpl in H0. assumption.
+                -- simpl in H0. destruct H0 as [Ha | Hb].
+                  ++ inversion Ha. 
+                  ++ destruct l0. simpl in Hb. assumption.
+                     eapply IHfuel. exact Hd. simpl. simpl in Hb.
+                     exact Hb.
+  Qed.
+
+  Lemma all_but_last : forall s tokens,
+    compress s = tokens ->
+      (forall ind phr, In (Last ind phr) (removelast tokens) -> False).
+  Proof.
+    intros.
+    unfold compress in H.
+    eapply all_but_last'.
+    exact H.
+    exact H0.
+  Qed.
+
+  Lemma removelast_len {A : Type} : forall (l : list A),
+    length (removelast l) = length l - 1.
+  Proof.
+    intros.
+    induction l.
+      - simpl. lia.
+      - simpl. destruct l.
+        + simpl. lia.
+        + simpl. simpl in IHl. lia.
+  Qed.    
+
+  Lemma phrases_diff_her : forall l,
+    phrases_differ_one l -> phrases_differ_one (removelast l).
+  Proof.
+    intros.
+    unfold phrases_differ_one in *.
+    intros.
+    specialize (H i j t1 t2 H0).
+    Search removelast.
+    specialize (ind_bound _ _ _ H1) as Hi.
+    specialize (ind_bound _ _ _ H2) as Hj.
+    specialize (removelast_len l) as He. 
+    specialize (removelast_firstn_len l) as Hlast. Search firstn.
+    rewrite Hlast in H1.
+    specialize (nth_error_firstn (Init.Nat.pred (length l)) l i) as Hnth.
+    rewrite H1 in Hnth. assert (i <? Init.Nat.pred (length l) = true). {
+      Search ((_ <? _) = true). eapply Nat.ltb_lt.
+      lia.
+    }
+    rewrite H5 in Hnth.
+    symmetry in Hnth. 
+    specialize (H Hnth).
+
+    rewrite Hlast in H2.
+    specialize (nth_error_firstn (Init.Nat.pred (length l)) l j) as Hnth2.
+    rewrite H2 in Hnth2. assert (j <? Init.Nat.pred (length l) = true). {
+      Search ((_ <? _) = true). eapply Nat.ltb_lt.
+      lia.
+    }
+    rewrite H6 in Hnth2.
+    symmetry in Hnth2. 
+    specialize (H Hnth2 H3 H4).
+    assumption.
+  Qed.
+                             
   Lemma compress_bound: forall s tokens,
     compress s = tokens ->
-    length s >= length tokens * (Nat.log2 (length tokens) - 3).
+    length s >= (length tokens - 1) * (Nat.log2 (length tokens - 1) - 2).
   Proof.
     unfold compress.
     intros * Hc.
     rewrite (compress'_eq_concat_phrases (length s) s empty_dict tokens
                ltac:(lia) ltac:(unfold empty_dict; now simpl) Hc).
-    apply comb.
-    pose proof (compress'_phrases_differ (length s) empty_dict s tokens []) as Hpd.
-    unfold empty_dict, agreement in *.
-    assert ((forall index phr next,
-               In (Tok index phr next) [] -> In (phr ++ [next]) [[]])). {
-     intros. now simpl in Hpd.
-   }
-    specialize (Hpd ltac:(lia) Hc ltac:(assumption) ltac:(now simpl)).
-    tauto.
+    specialize (all_but_last _ _ Hc) as H.
+    assert (length (concat (map get_phrase tokens)) >= length (concat (map get_phrase (removelast tokens)))). 2 : {
+      specialize (comb (removelast tokens) H) as Hcomb.
+      pose proof (compress'_phrases_differ (length s) empty_dict s tokens [] ltac:(lia) Hc) as Hpd.
+      assert (agreement empty_dict []). { unfold agreement. intros. inversion H1. } specialize (Hpd H1).
+      assert (nth_error empty_dict 0 = Some []). { simpl. reflexivity. } specialize (Hpd H2).
+      destruct Hpd as (Hpd1 & Hpd2).
+      specialize (phrases_diff_her _ Hpd2) as Hpdp.
+      specialize (Hcomb Hpdp).
+      specialize (removelast_len tokens) as Hlen.
+      Search Nat.log2.
+      assert (Nat.log2 (length (removelast tokens)) = Nat.log2 (length tokens - 1)). {
+        rewrite Hlen. lia.
+      }
+      lia.
+    }
+    clear.
+    induction tokens.
+      - simpl. lia.
+      - simpl. destruct tokens.
+        + simpl. lia.
+        + rewrite length_app.
+          change (length (concat (map get_phrase (a :: removelast (t :: tokens))))) with  
+            (length (get_phrase a ++ concat (map get_phrase (removelast (t :: tokens))))).
+          rewrite length_app. lia.
   Qed.
 
 End Impl.
