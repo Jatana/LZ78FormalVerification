@@ -33,20 +33,23 @@ Module Util.
     | _ => false
     end.
 
-  Lemma list_eqb_implies_equality {A : Type} (eqb : A -> A -> bool) : 
+  Lemma list_eqb_implies_equality {A : Type} (eqb : A -> A -> bool) :
     forall s t, (forall x y, eqb x y = true <-> x = y) -> list_eqb eqb s t = true -> s = t.
   Proof.
     intros.
-    generalize t H0. clear H0 t.
-    induction s.
-      - intros. destruct t. reflexivity. inversion H0.
-      - intros. destruct t. inversion H0. simpl in H0.
-        destruct (eqb a a0) eqn:Heq. specialize (H a a0). destruct H as (H1 & H2).
-        specialize (H1 Heq). subst. apply f_equal. apply IHs. inversion H0. reflexivity.
-        specialize (H a a0). destruct H as (H1 & H2).
-        assert ((a = a0) -> False). intro Heqaa0. subst. 
-        assert (eqb a0 a0 = true). apply H2. reflexivity. rewrite H in Heq. inversion Heq.
-        inversion H0.
+    revert t H0.
+    induction s; intros; destruct t; simpl.
+    - reflexivity.
+    - discriminate.
+    - discriminate.
+    - simpl in H0.
+      apply andb_prop in H0 as [? ?].
+      rewrite (IHs t H1).
+      destruct (eqb a a0) eqn:?.
+      + specialize (H a a0).
+        f_equal.
+        tauto.
+      + discriminate.
   Qed.
 
   Lemma equality_implies_length_eq {A : Type} (eqb : A -> A -> bool) :
@@ -107,8 +110,8 @@ Module Util.
         reflexivity.
   Qed.
 
-  Lemma slice_eq {A : Type} : 
-    forall s: list A, forall l : nat, 
+  Lemma slice_eq {A : Type} :
+    forall s: list A, forall l : nat,
     s = (slice 0 l s) ++ (slice l ((length s) - l) s).
   Proof.
     induction s; intros.

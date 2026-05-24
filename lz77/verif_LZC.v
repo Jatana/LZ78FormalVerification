@@ -80,7 +80,7 @@ Definition encode_length_spec :=
             Zlength (nat_to_bytes (Z.to_nat len)) <= out_len; 0 <= out_len; Zlength initial = 20)
       PARAMS (Vlong (Int64.repr len); out_) GLOBALS (gv)
       SEP (mem_mgr gv; data_at sh (tarray tuchar 20) initial out_)
-    POST [ tvoid ] 
+    POST [ tvoid ]
       PROP ()
       RETURN ()
       SEP (mem_mgr gv;
@@ -96,7 +96,7 @@ Definition is_equal_spec :=
         0 <= len <= Int64.max_unsigned;
         Zlength s_vals = len;
         Zlength t_vals = len;
-        Forall (fun x => 0 <= x <= 255) s_vals; 
+        Forall (fun x => 0 <= x <= 255) s_vals;
         Forall (fun x => 0 <= x <= 255) t_vals
       )
       PARAMS (s_ptr; t_ptr; Vlong (Int64.repr len))
@@ -106,7 +106,7 @@ Definition is_equal_spec :=
       )
     POST [ tint ]
       PROP ()
-      RETURN (Vint (Int.repr (if list_eqb Z.eqb s_vals t_vals then 1 else 0))) 
+      RETURN (Vint (Int.repr (if list_eqb Z.eqb s_vals t_vals then 1 else 0)))
       SEP (
         data_at sh1 (tarray tuchar len) (map Vint (map Int.repr s_vals)) s_ptr;
         data_at sh2 (tarray tuchar len) (map Vint (map Int.repr t_vals)) t_ptr
@@ -176,13 +176,13 @@ Arguments Nat.divmod : simpl never.
 Arguments Nat.div : simpl never.
 
 Lemma get_nth_Z : forall (x n : Z),
-  0 <= x -> 
+  0 <= x ->
   0 <= n ->
   Z.of_nat (get_nth (Z.to_nat x) (Z.to_nat n)) = (x / 128 ^ n) mod 128 + 128.
 Proof.
   intros x n Hx Hn.
   rewrite <- (Z2Nat.id n) by lia.
-  generalize (Z.to_nat n); intro n_nat. clear n Hn. generalize Hx. clear Hx. generalize x. 
+  generalize (Z.to_nat n); intro n_nat. clear n Hn. generalize Hx. clear Hx. generalize x.
   induction n_nat.
     - intros. change (Z.of_nat 0) with 0. rewrite easy_eq2. Search (_ / _). rewrite Zdiv_1_r.
       change (Z.to_nat 0) with 0%nat.
@@ -191,7 +191,7 @@ Proof.
 
 
       rewrite Nat2Z.inj_add.
-      
+
       change (Z.of_nat 128) with 128.
 
       Search (Z.of_nat _).
@@ -200,21 +200,21 @@ Proof.
       change (Z.of_nat 128) with 128.
       rewrite Z2Nat.id by lia.
       reflexivity.
-    - intros. 
+    - intros.
       rewrite Nat2Z.id.
       simpl get_nth.
       rewrite Nat2Z.id in IHn_nat.
       assert ((Nat.div (Z.to_nat x0) 128) = Z.to_nat (Z.of_nat ((Z.to_nat x0) / 128))).
       {
-       rewrite Nat2Z.id. reflexivity. 
+       rewrite Nat2Z.id. reflexivity.
       }
       rewrite H. rewrite IHn_nat.
         -- Search (_ + _ = _ + _). eapply Zplus_eq_compat. 2 : { reflexivity. }
            f_equal.
           rewrite Nat2Z.inj_div.
-          
+
           change (Z.of_nat 128) with 128.
-          
+
           rewrite Z2Nat.id by lia.
 
           replace (Z.of_nat (S n_nat)) with (Z.of_nat n_nat + 1) by lia.
@@ -244,7 +244,7 @@ Proof.
     - entailer!.
       f_equal.
       f_equal.
-      Search (_ ^ 0). 
+      Search (_ ^ 0).
       rewrite Z.pow_0_r.
       Search (_ / _).
       rewrite Z.div_1_r.
@@ -278,7 +278,7 @@ Proof.
       remember (Int64.unsigned (Int64.repr (x / 128 ^ n)) mod 128) as my_mod.
 
       rewrite !Int64.Z_mod_modulus_eq.
-      
+
       assert (H_my_mod_bounds : 0 <= my_mod < 128). {
         subst my_mod.
         apply Z.mod_pos_bound.
@@ -286,7 +286,7 @@ Proof.
       }
 
       rewrite !Z.mod_small.
-      2: { 
+      2: {
         change Int64.modulus with 18446744073709551616.
         lia.
       }
@@ -298,7 +298,7 @@ Proof.
       subst my_mod.
 
       rewrite Int64.unsigned_repr.
-      2: { 
+      2: {
         split.
         - apply Z.div_pos; lia.
         - apply easy_ineq1. lia. lia.
@@ -327,11 +327,11 @@ Proof.
 
 
   rewrite !Int.unsigned_repr.
-  2: { 
+  2: {
     change Int.max_unsigned with 4294967295.
-    lia. 
+    lia.
   }
-  2: { 
+  2: {
     change Int.max_unsigned with 4294967295.
     apply Int.unsigned_range_2.
   }
@@ -349,8 +349,8 @@ Proof.
     LOCAL(gvars gv; temp _len (Vlong (Int64.repr (len))); temp _out out_)
     SEP(mem_mgr gv; data_at sh (tarray tuchar 20) ((bytes_to_vals (nat_to_bytes_fixed 0 (Z.to_nat i) (Z.to_nat len))) ++ (sublist i 20 initial)) out_)).
     - entailer!. hint. autorewrite with sublist. auto.
-    - hint. 
-      Opaque Z.div Z.modulo Z.pow. 
+    - hint.
+      Opaque Z.div Z.modulo Z.pow.
       Opaque Z.to_nat Z.of_nat.
       hint.
       forward_call (sh, len, i, gv).
@@ -361,7 +361,7 @@ Proof.
             * unfold Int.min_signed. unfold Int.max_signed.
               unfold Int.half_modulus. unfold Int.modulus.
               unfold Int.wordsize. unfold Wordsize_32.wordsize.
-              Search (two_power_nat _). 
+              Search (two_power_nat _).
               change (two_power_nat 32) with 4294967296.
               change (4294967296 / 2) with (2147483648).
               lia.
@@ -369,26 +369,26 @@ Proof.
            unfold Int.min_signed. unfold Int.max_signed.
               unfold Int.half_modulus. unfold Int.modulus.
               unfold Int.wordsize. unfold Wordsize_32.wordsize.
-              Search (two_power_nat _). 
+              Search (two_power_nat _).
               change (two_power_nat 32) with 4294967296.
               change (4294967296 / 2) with (2147483648).
               lia.
-            forward. entailer!. hint. 
+            forward. entailer!. hint.
   replace (upd_Znth i (bytes_to_vals (nat_to_bytes_fixed 0 (Z.to_nat i) (Z.to_nat len)) ++ sublist i 20 initial) _)
      with (bytes_to_vals (nat_to_bytes_fixed 0 (Z.to_nat (i + 1)) (Z.to_nat len)) ++ sublist (i + 1) 20 initial).
   2: {
     replace (Z.to_nat (i + 1)) with (S (Z.to_nat i)) by lia.
-    
+
     rewrite nat_to_bytes_fixed_sn. Print bytes_to_vals. unfold bytes_to_vals.
-    
 
-    rewrite map_app. 
+
+    rewrite map_app.
     simpl.
-    
-    rewrite upd_Znth_app2.
-    2: { 
 
-      rewrite Zlength_map. 
+    rewrite upd_Znth_app2.
+    2: {
+
+      rewrite Zlength_map.
 
       rewrite Zlength_map. rewrite Zlength_map.
       rewrite Zlength_correct. rewrite nat_to_bytes_fixed_len.
@@ -396,7 +396,7 @@ Proof.
         - Search (Z.of_nat (Z.to_nat _)). rewrite Z2Nat.id. lia.
           lia.
         - rewrite Z2Nat.id. Search (Zlength _). specialize (Zlength_nonneg (sublist i 20 initial)) as Hnon.
-          lia. lia. 
+          lia. lia.
     }
 
     assert ((i -
@@ -430,20 +430,20 @@ Zlength
 
   entailer!.
 
-  - entailer!. hint. list_solve. 
+  - entailer!. hint. list_solve.
 Qed.
 
 Lemma pos_eqb_refl : forall p : positive, (p =? p)%positive = true.
 Proof.
   induction p.
-  
-  - simpl. 
+
+  - simpl.
     exact IHp.
-    
-  - simpl. 
+
+  - simpl.
     exact IHp.
-    
-  - simpl. 
+
+  - simpl.
     reflexivity.
 Qed.
 
@@ -455,29 +455,29 @@ Proof.
     - forward. entailer!. f_equal. f_equal.
   assert (H_len_s : Zlength s_vals = 0).
   inversion H4.
-  Search (Int64.Z_mod_modulus _ = _).  
+  Search (Int64.Z_mod_modulus _ = _).
   rewrite Int64.Z_mod_modulus_eq.
   symmetry.
   apply Z.mod_small.
   rep_lia.
 
   destruct s_vals as [| s s_vals'].
-  2: { 
+  2: {
     list_solve.
   }
 
   assert (H_len_t : Zlength t_vals = 0) by lia.
 
   destruct t_vals as [| t t_vals'].
-  2: { 
-    list_solve. 
+  2: {
+    list_solve.
   }
 
-  simpl. 
+  simpl.
   reflexivity.
 
   - assert (Int.min_signed <= 0 <= Int.max_signed).
-    unfold Int.min_signed. unfold Int.max_signed. unfold Int.half_modulus. unfold Int.modulus. 
+    unfold Int.min_signed. unfold Int.max_signed. unfold Int.half_modulus. unfold Int.modulus.
     change (two_power_nat Int.wordsize) with (4294967296).
     change (4294967296 / 2) with (2147483648).
     lia.
@@ -490,8 +490,8 @@ Proof.
     assert (H_len_not_zero : len <> 0).
     {
       intro H_zero.
-      subst len. 
-      apply H4. 
+      subst len.
+      apply H4.
       rewrite H_zero.
       reflexivity.
     }
@@ -505,8 +505,8 @@ Proof.
     assert (H_len_not_zero : len <> 0).
     {
       intro H_zero.
-      subst len. 
-      apply H4. 
+      subst len.
+      apply H4.
       rewrite H_zero.
       reflexivity.
     }
@@ -514,7 +514,7 @@ Proof.
     lia.
 
     forward.
-      -- entailer!. 
+      -- entailer!.
         rewrite Forall_Znth in H2.
         pose proof (H2 0 H7) as H_s0_bounds.
         rewrite Int.unsigned_repr.
@@ -524,7 +524,7 @@ Proof.
         change Byte.max_unsigned with 255.
         rep_lia.
       -- forward.
-          --- entailer!.  
+          --- entailer!.
               assert (H_t_len : 0 <= 0 < Zlength t_vals) by lia.
               rewrite Forall_Znth in H3.
               pose proof (H3 0 H_t_len) as H_t0_bounds.
@@ -537,7 +537,7 @@ Proof.
               change Byte.max_unsigned with 255.
               rep_lia.
 
-          --- forward_if. 
+          --- forward_if.
             ---- forward. entailer!.
                  f_equal. f_equal.
                 destruct s_vals as [| s s_vals'].
@@ -556,8 +556,8 @@ Proof.
                   reflexivity.
                 }
 
-                simpl list_eqb. 
-                
+                simpl list_eqb.
+
                 destruct (Zeq_bool s t) eqn:H_bool.
                 ----- apply Zeq_bool_eq in H_bool.
                   contradiction.
@@ -579,23 +579,23 @@ Proof.
                   * entailer!.
                   * entailer!. hint. autorewrite with sublist in *|-.
                     assert_PROP (field_address0 (Tarray tuchar (Zlength s_vals) noattr) (SUB 1) s_ptr = offset_val 1 s_ptr) as Hs_ptr.
-                    { entailer!. 
+                    { entailer!.
                       unfold field_address0.
-                    
+
                       if_tac.
-                      
-                      - simpl. 
+
+                      - simpl.
                         reflexivity.
-                        
+
                       - auto with field_compatible. hint.
                         exfalso.
 
                         unfold field_address0 in H12.
 
                         destruct (field_compatible0_dec (Tarray tuchar (Zlength s_vals) noattr) (SUB 1) s_ptr).
-                        
+
                         + contradiction.
-                          
+
                         + destruct H12 as [H_isptr _].
                           inversion H_isptr.
                     }
@@ -603,20 +603,20 @@ Proof.
                     assert_PROP (field_address0 (Tarray tuchar (Zlength s_vals) noattr) (SUB 1) t_ptr = offset_val 1 t_ptr) as Ht_ptr.
                     { entailer!. auto with field_compatible.
                       unfold field_address0.
-                      
+
                       if_tac.
-                      
-                      - simpl. 
+
+                      - simpl.
                         reflexivity.
-                        
-                      - exfalso. 
-                      
+
+                      - exfalso.
+
                         unfold field_address0 in H18.
-                        
+
                         destruct (field_compatible0_dec (Tarray tuchar (Zlength s_vals) noattr) (SUB 1) t_ptr).
-                        
+
                         + contradiction.
-                          
+
                         + destruct H18 as [H_isptr _].
                           inversion H_isptr.
                     }
@@ -638,7 +638,7 @@ Proof.
                 + apply Forall_sublist.
                   apply H3.
                 *  forward. entailer!.
-                  ++ f_equal. f_equal. 
+                  ++ f_equal. f_equal.
 
   destruct s_vals as [| s s_vals']; [list_solve|].
   destruct t_vals as [| t t_vals']; [list_solve|].
@@ -650,90 +650,90 @@ Proof.
   {
     inversion H2; subst.
     inversion H3; subst.
-    
+
     apply (f_equal Int.unsigned) in H8.
     rewrite !Int.unsigned_repr in H8 by rep_lia.
     exact H8.
   }
-  
-  subst t. 
+
+  subst t.
 
   autorewrite with sublist.
 
   simpl list_eqb.
 
   assert (H_true : Zeq_bool s s = true).
-  { 
-    unfold Zeq_bool. 
+  {
+    unfold Zeq_bool.
     destruct (Z.eq_dec s s).
     - destruct s. reflexivity. Search (_ =? _). rewrite pos_eqb_refl. reflexivity. apply pos_eqb_refl.
     - contradiction.
   }
   rewrite H_true.
-  
+
   simpl.
   autorewrite with sublist.
   Search (sublist 1 _ _ = _). rewrite sublist_1_cons.
   simpl.
   assert (Z.succ (Zlength s_vals') - 1 = (Zlength s_vals')).
-  lia. rewrite H0. rewrite sublist_1_cons. 
+  lia. rewrite H0. rewrite sublist_1_cons.
   rewrite H0.
   autorewrite with sublist.
   autorewrite with sublist.
   assert (Zlength s_vals' = Zlength t_vals').
   rewrite !Zlength_cons in H1.
-  
+
   lia.
   rewrite H23.
   autorewrite with sublist.
   reflexivity.
 
-  ++ entailer!.   
+  ++ entailer!.
 
   rewrite <- !sublist_map.
 
   assert_PROP (offset_val 1 s_ptr = field_address0 (Tarray tuchar (Zlength s_vals) noattr) (SUB 1) s_ptr) as Hs_ptr.
-  { entailer!. 
+  { entailer!.
   unfold field_address0.
-  
+
   if_tac.
-  
-  - simpl. 
+
+  - simpl.
     reflexivity.
-    
+
   - auto with field_compatible.
     exfalso.
-  
+
   apply H30.
-  
-  
+
+
   auto with field_compatible.
-  
+
   unfold field_compatible0.
   unfold field_compatible in H11, H17.
-  
-  
+
+
   destruct H17 as [H_isptr [H_cosu [H_size1 [H_align _]]]].
   destruct H11 as [_ [_ [H_size2 _]]].
-  
+
   split. { exact H_isptr. }
   split. { exact H_cosu. }
-  split. 
-  { 
+  split.
+  {
     destruct s_ptr; try contradiction.
     unfold size_compatible in *. simpl in *.
     unfold Ptrofs.add in H_size2.
-    
+
     rewrite Ptrofs.unsigned_repr in H_size2 by admit.
-    
+
     admit.
   }
   split.
   {
     unfold align_compatible in *. auto.
-    
+
     destruct s_ptr as [| | | | | b i_ofs]; try contradiction.
-  
+
 
   simpl in H_align |- *.
 

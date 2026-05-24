@@ -7,8 +7,8 @@ Module Impl.
   Fixpoint compress' (before after: list byte) (l: nat): list Token :=
     match after, l with
     | [], _ => []
-    | hd :: tl, 0 => 
-        match (find_largest_match before after) with 
+    | hd :: tl, 0 =>
+        match (find_largest_match before after) with
         | None => Lit hd :: compress' (before ++ [hd]) tl 0
         | Some (length, offset) => Ref length offset :: compress' (before ++ [hd]) tl (length - 1)
         end
@@ -32,7 +32,7 @@ Module Impl.
     nat_to_bytes (length s) ++ (tokens_to_bytes (compress s)).
 
   Definition decompress_from_bytes s :=
-    let (len, compressed) := bytes_to_nat s in 
+    let (len, compressed) := bytes_to_nat s in
     decompress (bytes_to_tokens compressed).
 
 
@@ -59,35 +59,34 @@ Module Impl.
       compress' before after l
       = compress' (before ++ (slice 0 l after)) (slice l (length after) after) 0.
   Proof.
-    induction l.
-    - intros.
-      assert ((slice 0 0 after) = []).
-      {
+    induction l; intros.
+    - assert ((slice 0 0 after) = []). {
         specialize (slice_size after 0 0) as H.
-        inversion H. destruct (slice 0 0) eqn:Hd.
-        simpl. rewrite Hd. reflexivity. inversion H1. 
+        inversion H.
+        destruct (slice 0 0) eqn:Hd; simpl.
+        - now rewrite Hd.
+        - discriminate.
       }
-      rewrite H. rewrite app_nil_r.
-      assert (((slice 0 (length after) after)) = after).
-      { eapply slice_l_length. lia. }
-      rewrite H0. reflexivity.
-    - intros. destruct after; simpl. reflexivity.
-      assert ((slice l (S (length after)) after) = (slice l ((length after)) after)).
-      {
+      rewrite H.
+      rewrite app_nil_r.
+      assert (((slice 0 (length after) after)) = after) by (eapply slice_l_length; lia).
+      now rewrite H0.
+    - destruct after; simpl.
+      + reflexivity.
+      + assert ((slice l (S (length after)) after) = (slice l ((length after)) after)). {
         specialize (slice_p_l_length after (S (length after)) l) as Hslice.
         assert (length after - l <= S (length after)) by lia.
         specialize (Hslice H). rewrite Hslice. clear Hslice.
-
         specialize (slice_p_l_length after ((length after)) l) as Hslice.
         assert (length after - l <= (length after)) by lia.
-        specialize (Hslice H0). rewrite Hslice.
-        reflexivity.
+        specialize (Hslice H0).
+        now rewrite Hslice.
       }
       rewrite H.
       assert (b :: slice 0 l after = [b] ++ slice 0 l after) by reflexivity.
       rewrite H0. clear H0.
       specialize (IHl (before ++ [b]) after).
-      rewrite app_assoc. exact IHl.
+      now rewrite app_assoc.
   Qed.
 
   Theorem correctness': forall n before after,
@@ -144,7 +143,7 @@ Module Impl.
                rewrite H5. rewrite app_assoc. reflexivity.
              }
              rewrite H5. apply f_equal. clear H4 H5 H3 H2 H1 H0 Heqo IHn.
-             specialize (slice_eq after (len - 1)) as Hseq. 
+             specialize (slice_eq after (len - 1)) as Hseq.
              assert ((slice (len - 1) (length after) after)
                      = slice (len - 1) (length after - (len - 1)) after).
              {
@@ -170,7 +169,7 @@ Module Impl.
            simpl in H.
            lia.
   Qed.
-  
+
   Theorem correctness: forall s,
     decompress (compress s) = s.
   Proof.
@@ -195,7 +194,7 @@ Module Impl.
   Qed.
 
   Lemma weight_bound : forall n before after,
-    length after <= n -> 
+    length after <= n ->
     list_sum (map token_weight (compress' before after 0)) <= length after.
   Proof.
     induction n; intros; destruct after; simpl; try lia.
@@ -228,12 +227,12 @@ Module Impl.
   Lemma upperbound': forall before after,
       length (tokens_to_bytes (compress' before after 0))
       <= (9 * length after + 7) / 8.
-  Proof.                     
+  Proof.
     intros. specialize (weight_bound (length after) before after ltac:(lia)) as H.
     pose proof (compress_valid after before 0) as Hv.
     specialize (tokens_to_bytes_bounded_by_weight (length (compress' before after 0))
                 (compress' before after 0) Hv ltac:(lia)) as H'.
-    etransitivity. exact H'. 
+    etransitivity. exact H'.
     apply Nat.Div0.div_le_mono.
     lia.
   Qed.

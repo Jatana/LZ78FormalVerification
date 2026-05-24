@@ -14,7 +14,7 @@ Module Tokens.
     | Tok index _ _ :: rest => index < 2 ^ (num_bits_for_dict dict_size)
                                /\ valid_tokens rest (S dict_size)
     | Last _ _ :: _ :: _  => False
-    | [Last index _] => index < 2 ^ (num_bits_for_dict dict_size) 
+    | [Last index _] => index < 2 ^ (num_bits_for_dict dict_size)
     | [] => True
     end.
 
@@ -23,7 +23,7 @@ Module Tokens.
       In (Tok index phr next) tokens ->
       In (phr ++ [next]) dict.
 
-  Definition get_phrase (t: Token) := 
+  Definition get_phrase (t: Token) :=
     match t with
     | Tok _ phrase next => phrase ++ [next]
     | Last _ phrase => phrase
@@ -35,14 +35,14 @@ Module Tokens.
       | Last _ _  => False
     end.
 
-  Definition phrases_differ (tokens tokens': list Token) := 
+  Definition phrases_differ (tokens tokens': list Token) :=
     forall i j t1 t2,
       nth_error tokens i = Some t1 ->
       nth_error tokens' j = Some t2 ->
       not_last t1 -> not_last t2 ->
       get_phrase t1 <> get_phrase t2.
 
-  Definition phrases_differ_one (tokens: list Token) := 
+  Definition phrases_differ_one (tokens: list Token) :=
     forall i j t1 t2,
       (i <> j) ->
       nth_error tokens i = Some t1 ->
@@ -67,7 +67,7 @@ Module Tokens.
     | [] => 0
     | b :: rest => to_nat b + 2 * k_bits_to_nat rest
     end.
-      
+
   Fixpoint tokens_to_bits' (dict_size: nat) (tokens: list Token) :=
     match tokens with
     | [] => []
@@ -106,7 +106,7 @@ Module Tokens.
     agreement dict tokens ->
     agreement (dict ++ [phr ++ [next]]) (tokens ++ [Tok n phr next]).
   Proof.
-    unfold agreement. 
+    unfold agreement.
     intros.
     apply in_or_app.
     specialize (in_app_or _ _ _ H0) as Hcase.
@@ -289,7 +289,7 @@ Module Tokens.
     - assumption.
     - reflexivity.
   Qed.
-  
+
   Lemma length_nat_to_k_bits :
     forall k n,
       length (nat_to_k_bits k n) = k.

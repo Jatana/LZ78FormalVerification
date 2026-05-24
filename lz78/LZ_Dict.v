@@ -206,7 +206,7 @@ Module Dict.
       apply Nat.add_le_mono; try lia.
       apply Nat.log2_le_mono. lia.
     }
-    rewrite Nat.leb_nle in Ha. 
+    rewrite Nat.leb_nle in Ha.
     rewrite Nat.leb_le in Hb. lia.
   Qed.
 
