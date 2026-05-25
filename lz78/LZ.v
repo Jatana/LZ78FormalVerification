@@ -1374,3 +1374,5 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
   Qed.
 
 End Impl.
+
+Export Impl.
