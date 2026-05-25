@@ -189,3 +189,5 @@ Module Impl.
   Qed. 
 
 End Impl.
+
+Export Impl.
