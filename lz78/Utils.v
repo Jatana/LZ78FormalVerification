@@ -27,7 +27,8 @@ Module Util.
 
   Lemma app_l_eq_length {A}: forall n, forall l1 l2 l3 l4: list A,
     l1 ++ l2 = l3 ++ l4 ->
-    length l1 = n -> length l3 = n ->
+    length l1 = n ->
+    length l3 = n ->
     l1 = l3.
   Proof.
     induction n; intros * Heq Hlen1 Hlen3.

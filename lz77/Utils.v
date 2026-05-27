@@ -65,7 +65,7 @@ Module Util.
       assumption.
   Qed.
 
-  Lemma slice_size {A : Type} :
+  Lemma length_slice {A : Type} :
     forall s: list A, forall p l,
     length (slice p l s) = min l (length s - p).
   Proof.
@@ -80,7 +80,7 @@ Module Util.
     - apply IHs.
   Qed.
 
-  Lemma slice_l_zero {A : Type} :
+  Lemma slice_zero_length {A : Type} :
     forall s: list A, forall p,
     slice p 0 s = [].
   Proof.
@@ -102,7 +102,7 @@ Module Util.
              | [ |- _ ] => trivial || lia
              end.
       + assert (Heq: Nat.min l2 0 = 0) by lia. rewrite Heq.
-        rewrite slice_l_zero. reflexivity.
+        rewrite slice_zero_length. reflexivity.
       + f_equal.
         specialize (IHs 0 n 0 n0). rewrite IHs.
         assert (Heq0: 0 + 0 = 0) by lia. rewrite Heq0.
@@ -120,7 +120,7 @@ Module Util.
       + specialize (IHs (length s)).
         assert (length s - length s = 0) by lia.
         rewrite H in IHs.
-        rewrite slice_l_zero in IHs.
+        rewrite slice_zero_length in IHs.
         rewrite app_nil_r in IHs.
         rewrite <- IHs.
         reflexivity.
@@ -137,7 +137,7 @@ Module Util.
     pose proof (slice_eq s l) as Hs.
     assert (Hl: length s - l = 0) by lia.
     rewrite Hl in Hs.
-    rewrite slice_l_zero in Hs.
+    rewrite slice_zero_length in Hs.
     rewrite app_nil_r in Hs.
     auto.
   Qed.

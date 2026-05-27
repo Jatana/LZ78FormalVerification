@@ -64,7 +64,7 @@ Module Tokens.
         lia.
     Qed.
 
-    Lemma nat_to_bytes_correctness': forall n fuel rest,
+    Lemma nat_to_bytes_fueled_correctness: forall n fuel rest,
       n <> 0 ->
       n <= fuel ->
       bytes_to_nat (nat_to_bytes_fueled fuel n ++ rest) = (n, rest).
@@ -123,10 +123,10 @@ Module Tokens.
       bytes_to_nat (nat_to_bytes n ++ rest) = (n, rest).
     Proof.
       intros. unfold nat_to_bytes.
-      rewrite nat_to_bytes_correctness'; auto.
+      rewrite nat_to_bytes_fueled_correctness; auto.
     Qed.
 
-    Lemma nat_to_bytes_length': forall n fuel,
+    Lemma nat_to_bytes_fueled_length: forall n fuel,
       length (nat_to_bytes_fueled fuel n) <= Nat.log2 n / 7 + 1.
     Proof.
       induction n as [n IHn] using lt_wf_rec; intros.
@@ -171,9 +171,9 @@ Module Tokens.
 
     Lemma nat_to_bytes_length: forall n,
       length (nat_to_bytes n) <= Nat.log2 n / 7 + 1.
-    Proof. intro n. exact (nat_to_bytes_length' n n). Qed.
+    Proof. intro n. exact (nat_to_bytes_fueled_length n n). Qed.
 
-    Lemma to_nat_nibbles_correct : forall h l,
+    Lemma to_nat_nibbles_correctness : forall h l,
       h < 16 ->
       l < 16 ->
       to_nat (nibbles_to_byte h l) = h * 16 + l.
@@ -340,7 +340,7 @@ Module Tokens.
         + simpl in *.
           pose proof (Nat.divmod_spec (offset - 3) 255 0 255 ltac:(lia)).
           destruct (Nat.divmod (offset - 3) 255 0 255) as [q'1 u'1]. simpl.
-          rewrite (to_nat_nibbles_correct (length - 3) q'1 ltac:(lia) ltac:(lia)).
+          rewrite (to_nat_nibbles_correctness (length - 3) q'1 ltac:(lia) ltac:(lia)).
           pose proof (Nat.divmod_spec ((length - 3) * 16 + q'1) 15 0 15 ltac:(lia)).
           destruct (Nat.divmod ((length - 3) * 16 + q'1) 15 0 15) as [q'2 u'2]. simpl.
           lia.
@@ -375,7 +375,7 @@ Module Tokens.
           destruct H. lia.
     Qed.
 
-    Lemma chunk_remove: forall n tokens acc flag_byte tail,
+    Lemma tokens_to_bytes_chunk_split: forall n tokens acc flag_byte tail,
       n <= 8 ->
       Forall valid_token tokens ->
       tokens_to_bytes_chunk n tokens = (flag_byte, tail, acc) ->
@@ -433,7 +433,7 @@ Module Tokens.
       simpl in H; try discriminate; injection H as <- <-; reflexivity.
     Qed.
 
-    Lemma chunk_app: forall n flag acc rest tokens tail,
+    Lemma bytes_to_tokens_chunk_app: forall n flag acc rest tokens tail,
       bytes_to_tokens_chunk n flag acc = (tokens, tail) ->
       length tokens = n \/ rest = [] ->
       bytes_to_tokens_chunk n flag (acc ++ rest) = (tokens, tail ++ rest).
@@ -473,7 +473,7 @@ Module Tokens.
           lia.
     Qed.
 
-    Lemma zero_lt_2_pow: forall n,
+    Lemma pow2_positive: forall n,
       0 < 2 ^ n.
     Proof. intros. assert (2 ^ n <> 0) by (apply Nat.pow_nonzero; lia). lia. Qed.
 
@@ -489,11 +489,11 @@ Module Tokens.
       - rewrite nat_to_byte_correctness.
         + exists 0.
           split.
-          * apply zero_lt_2_pow.
+          * apply pow2_positive.
           * lia.
         + assert (x * 2 ^ n < 2 ^ (8 - n) * 2 ^ n). {
             apply Nat.mul_lt_mono_pos_r.
-            - apply zero_lt_2_pow.
+            - apply pow2_positive.
             - assumption.
           }
           assert (8 - n + n = 8) by lia.
@@ -534,7 +534,7 @@ Module Tokens.
             -- rewrite Heq. simpl. lia.
     Qed.
 
-    Lemma div_double_plus_r: forall n r,
+    Lemma div2_double_plus_remainder: forall n r,
       Nat.div2 (2 * n + r) = n + Nat.div2 r.
     Proof.
       intros.
@@ -564,10 +564,10 @@ Module Tokens.
         }
         replace (2 ^ n + (2 ^ n + 0)) with (2 * 2 ^ n) in * by reflexivity.
         specialize (IHn b x (Nat.div2 rest) H0). simpl in IHn.
-        now rewrite Nat.mul_comm, <- Nat.mul_assoc, div_double_plus_r, Nat.mul_comm.
+        now rewrite Nat.mul_comm, <- Nat.mul_assoc, div2_double_plus_remainder, Nat.mul_comm.
     Qed.
 
-    Lemma to_tokens_chunk_correctness: forall n tokens acc flag_byte x,
+    Lemma bytes_to_tokens_chunk_correctness: forall n tokens acc flag_byte x,
       n <= 8 ->
       x < 2 ^ (8 - n) ->
       Forall valid_token tokens ->
@@ -608,7 +608,7 @@ Module Tokens.
           now rewrite IHn.
     Qed.
 
-    Lemma to_tokens_fueled_correctness: forall fuel1 fuel2 t l,
+    Lemma bytes_to_tokens_fueled_correctness: forall fuel1 fuel2 t l,
       Forall valid_token t ->
       length t <= fuel1 ->
       tokens_to_bytes_fueled t fuel1 = l ->
@@ -639,10 +639,10 @@ Module Tokens.
 
             assert (list_bool_to_byte flag 0 8 = b) by congruence. subst.
             injection H1 as H1.
-            pose proof (chunk_remove 8 (t :: t0) bytes flag restT ltac:(lia) H Heqp)
+            pose proof (tokens_to_bytes_chunk_split 8 (t :: t0) bytes flag restT ltac:(lia) H Heqp)
                         as [prev [Heqpv [Hf [Hl Ht]]]].
-            pose proof (to_tokens_chunk_correctness 8 prev bytes flag 0 ltac:(lia)
-                        ltac:(apply zero_lt_2_pow) Hf ltac:(lia) Ht).
+            pose proof (bytes_to_tokens_chunk_correctness 8 prev bytes flag 0 ltac:(lia)
+                        ltac:(apply pow2_positive) Hf ltac:(lia) Ht).
             assert (Hor: length prev = 8 \/ tokens_to_bytes_fueled restT fuel1 = []). {
               destruct (Nat.min_dec 8 (length (t :: t0))).
               - left. lia.
@@ -655,7 +655,7 @@ Module Tokens.
                 }
                 subst. destruct fuel1; reflexivity.
             }
-            pose proof (chunk_app 8 (to_nat (list_bool_to_byte flag 0 8)) bytes
+            pose proof (bytes_to_tokens_chunk_app 8 (to_nat (list_bool_to_byte flag 0 8)) bytes
                         (tokens_to_bytes_fueled restT fuel1) prev [] H3 Hor).
             rewrite app_nil_l in H4.
             assert (prev = tokens) by congruence. subst.
@@ -677,13 +677,13 @@ Module Tokens.
             exact (IHfuel1 fuel2 restT tail H1 H5 ltac:(congruence) H6).
     Qed.
 
-    Theorem to_tokens_correctness: forall t,
+    Theorem tokens_to_bytes_to_tokens_correctness: forall t,
       Forall valid_token t ->
       bytes_to_tokens (tokens_to_bytes t) = t.
     Proof.
       intros.
       unfold bytes_to_tokens, tokens_to_bytes.
-      eapply to_tokens_fueled_correctness; trivial.
+      eapply bytes_to_tokens_fueled_correctness; trivial.
     Qed.
 
     Definition token_weight t :=
@@ -692,7 +692,7 @@ Module Tokens.
       | Ref _ _ => 3
       end.
 
-    Lemma chunk_length_bound': forall n seq,
+    Lemma tokens_to_bytes_chunk_len_bound: forall n seq,
       n <= 8 ->
       (tokens_to_bytes_chunk_len n seq) <= ((list_sum (map token_weight seq))).
     Proof.
@@ -701,7 +701,7 @@ Module Tokens.
       destruct t; simpl; lia.
     Qed.
 
-    Lemma chunk_length_bound: forall tokens n acc flag_byte tail,
+    Lemma tokens_to_bytes_chunk_weight_bound: forall tokens n acc flag_byte tail,
       n <= 8 ->
       Forall valid_token tokens ->
       tokens_to_bytes_chunk n tokens = (flag_byte, tail, acc) ->
@@ -711,7 +711,7 @@ Module Tokens.
         length acc <= (list_sum (map token_weight prev)).
     Proof.
       intros.
-      pose proof (chunk_remove n tokens acc flag_byte tail H H0 H1).
+      pose proof (tokens_to_bytes_chunk_split n tokens acc flag_byte tail H H0 H1).
       destruct H2 as [prev [He [Hv [Hl Ht]]]].
       exists prev.
       repeat split.
@@ -720,7 +720,7 @@ Module Tokens.
         + left. reflexivity.
         + right. rewrite He, length_app in Hl.
           simpl in Hl. lia.
-      - pose proof (chunk_length_bound' n prev H).
+      - pose proof (tokens_to_bytes_chunk_len_bound n prev H).
         now rewrite <- (tokens_to_bytes_chunk_len_correctness n prev flag_byte [] acc Ht).
     Qed.
 
@@ -736,7 +736,7 @@ Module Tokens.
         + unfold tokens_to_bytes_fueled.
           destruct (tokens_to_bytes_chunk 8 (t :: tokens)) as [[flag tail] acc] eqn:?.
           simpl length. rewrite length_app.
-          destruct (chunk_length_bound (t :: tokens) 8 acc flag tail ltac:(lia) H Heqp)
+          destruct (tokens_to_bytes_chunk_weight_bound (t :: tokens) 8 acc flag tail ltac:(lia) H Heqp)
                     as (prev & Ht & Hor & Hl).
           simpl in H.
           match goal with

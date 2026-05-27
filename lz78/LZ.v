@@ -4,7 +4,7 @@ Import ListNotations.
 
 Module Impl.
 
-  Fixpoint compress' (fuel: nat) (dict: dict_type) (s: list bool) :=
+  Fixpoint compress_aux (fuel: nat) (dict: dict_type) (s: list bool) :=
     match fuel with
     | 0 => []
     | S fuel =>
@@ -15,23 +15,23 @@ Module Impl.
             match skipn len s with
             | [] => [Last index (firstn len s)]
             | next :: rest =>
-                Tok index (firstn len s) next :: compress' fuel (dict ++ [firstn len s ++ [next]]) rest
+                Tok index (firstn len s) next :: compress_aux fuel (dict ++ [firstn len s ++ [next]]) rest
             end
         end
     end.
 
   Definition compress (s: list bool) :=
-    compress' (length s) empty_dict s.
+    compress_aux (length s) empty_dict s.
 
   Definition compress_to_bits (s: list bool) :=
     tokens_to_bits (compress s).
 
-  Fixpoint decompress' (dict: dict_type) (tokens: list Token) :=
+  Fixpoint decompress_aux (dict: dict_type) (tokens: list Token) :=
     match tokens with
     | [] => []
     | Tok index _ next :: rest =>
         match nth_error dict index with
-        | Some s => s ++ [next] ++ decompress' (dict ++ [s ++ [next]]) rest
+        | Some s => s ++ [next] ++ decompress_aux (dict ++ [s ++ [next]]) rest
         | None => [] (* Should not happen *)
         end
     | Last index _ :: rest =>
@@ -42,17 +42,17 @@ Module Impl.
     end.
 
   Definition decompress (tokens: list Token) :=
-    decompress' empty_dict tokens.
+    decompress_aux empty_dict tokens.
 
   Definition decompress_from_bits (s: list bool) :=
     decompress (bits_to_tokens s).
 
 
-  Lemma compress'_valid_tokens: forall fuel s dict n,
+  Lemma compress_aux_valid_tokens: forall fuel s dict n,
     length s <= fuel ->
     nth_error dict 0 = Some [] ->
     length dict <= n ->
-    valid_tokens (compress' fuel dict s) n.
+    valid_tokens (compress_aux fuel dict s) n.
   Proof.
     induction fuel; intros * Hlen Hfst Hd; simpl in *; try constructor.
     destruct s; try constructor.
@@ -85,9 +85,9 @@ Module Impl.
           lia.
   Qed.
 
-  Lemma decompress'_indep : forall tokens tokens' dict,
-      list_eq token_equiv tokens tokens' ->
-      decompress' dict tokens = decompress' dict tokens'.
+  Lemma decompress_aux_indep : forall tokens tokens' dict,
+      list_eqiv token_equiv tokens tokens' ->
+      decompress_aux dict tokens = decompress_aux dict tokens'.
   Proof.
     induction tokens; intros * H; simpl in *; destruct tokens'; try tauto.
     destruct H as (Ha & Hb).
@@ -100,17 +100,17 @@ Module Impl.
   Qed.
 
   Lemma decompress_indep : forall tokens tokens',
-    list_eq token_equiv tokens tokens' ->
+    list_eqiv token_equiv tokens tokens' ->
     decompress tokens = decompress tokens'.
   Proof.
     intros. unfold decompress.
-    eapply decompress'_indep. assumption.
+    eapply decompress_aux_indep. assumption.
   Qed.
 
-  Lemma compress_correctness': forall fuel dict s,
+  Lemma compress_correctness_aux: forall fuel dict s,
     length s <= fuel ->
     nth_error dict 0 = Some [] ->
-    decompress' dict (compress' fuel dict s) = s.
+    decompress_aux dict (compress_aux fuel dict s) = s.
   Proof.
     induction fuel; simpl; intros dict s Hlen Hfst.
     - inversion Hlen.
@@ -148,19 +148,19 @@ Module Impl.
     pose proof (tokens_to_bits_correctness (compress s)).
     erewrite decompress_indep. 2: {
       apply H.
-      eapply compress'_valid_tokens.
+      eapply compress_aux_valid_tokens.
         - lia.
         - reflexivity.
         - simpl. lia.
     }
-    - eapply compress_correctness'.
+    - eapply compress_correctness_aux.
       + lia.
       + unfold empty_dict.
         reflexivity.
   Qed.
 
-  Lemma compress'_length_le_fuel: forall fuel dict s,
-      length (compress' fuel dict s) <= fuel.
+  Lemma compress_aux_length_le_fuel: forall fuel dict s,
+      length (compress_aux fuel dict s) <= fuel.
   Proof.
     induction fuel as [|fuel IH]; intros dict s; simpl.
     - lia.
@@ -178,12 +178,12 @@ Module Impl.
   Proof.
     intros s.
     unfold compress.
-    apply compress'_length_le_fuel.
+    apply compress_aux_length_le_fuel.
   Qed.
 
-  Lemma tokens_to_bits'_length_bound: forall tokens dict_size max_dict_size,
+  Lemma tokens_to_bits_aux_length_bound: forall tokens dict_size max_dict_size,
       dict_size + length tokens <= max_dict_size ->
-      length (tokens_to_bits' dict_size tokens)
+      length (tokens_to_bits_aux dict_size tokens)
         <= length tokens * (num_bits_for_dict max_dict_size + 1).
   Proof.
     induction tokens as [|tok rest IH]; intros dict_size max_dict_size Hbound.
@@ -211,16 +211,16 @@ Module Impl.
       apply Nat.mul_le_mono_r.
       apply compress_length_upperbound.
     }
-    apply tokens_to_bits'_length_bound.
+    apply tokens_to_bits_aux_length_bound.
     pose proof (compress_length_upperbound s).
     simpl in *.
     now apply Nat.succ_le_mono in H.
   Qed.
 
-  Lemma compress'_eq_concat_phrases: forall fuel s dict tokens,
+  Lemma compress_aux_eq_concat_phrases: forall fuel s dict tokens,
     length s <= fuel ->
     nth_error dict 0 = Some [] ->
-    compress' fuel dict s = tokens ->
+    compress_aux fuel dict s = tokens ->
     s = concat (map get_phrase tokens).
   Proof.
     induction fuel; intros * Hlen Hnth Hc; subst; simpl in *.
@@ -254,10 +254,10 @@ Module Impl.
   Qed.
 
   (* TODO: Rewrite *)
-  Lemma compress'_phrases_differ: forall fuel dict s tokens prev_tokens,
+  Lemma compress_aux_phrases_differ: forall fuel dict s tokens prev_tokens,
     length s <= fuel ->
-    compress' fuel dict s = tokens ->
-    agreement dict prev_tokens ->
+    compress_aux fuel dict s = tokens ->
+    dict_tokens_agreement dict prev_tokens ->
     nth_error dict 0 = Some [] ->
     phrases_differ prev_tokens tokens /\ phrases_differ_one tokens.
   Proof.
@@ -272,7 +272,7 @@ Module Impl.
         + destruct (find_largest_prefix dict (b :: s)) eqn:Hd. destruct (skipn n0 (b::s)) eqn:Hd2.
           * subst. split. unfold phrases_differ. intros.
             destruct j. 2: { simpl in H3. rewrite nth_error_nil in H3. inversion H3. }
-            simpl in H3. inversion H3. subst. simpl. unfold agreement in H1.
+            simpl in H3. inversion H3. subst. simpl. unfold dict_tokens_agreement in H1.
             destruct t1.
               -- unfold not_last in H5. contradiction.
               -- unfold not_last in H5. contradiction.
@@ -285,8 +285,8 @@ Module Impl.
             }
             specialize (IHfuel H3). clear H3.
             inversion H0. specialize (IHfuel H5).
-            assert (agreement (dict ++ [firstn n0 (b :: s) ++ [b0]]) (prev_tokens ++ [Tok n (firstn n0 (b :: s)) b0])). {
-              eapply agreement_app. assumption.
+            assert (dict_tokens_agreement (dict ++ [firstn n0 (b :: s) ++ [b0]]) (prev_tokens ++ [Tok n (firstn n0 (b :: s)) b0])). {
+              eapply dict_tokens_agreement_app. assumption.
             }
             specialize (IHfuel H3). clear H3.
             assert (nth_error (dict ++ [firstn n0 (b :: s) ++ [b0]]) 0 = Some []). {
@@ -295,10 +295,10 @@ Module Impl.
             specialize (IHfuel H3). clear H3.
             destruct IHfuel as (IHfuel1 & IHfuel2).
 
-            split. unfold phrases_differ. intros. unfold agreement in H1. destruct j.
+            split. unfold phrases_differ. intros. unfold dict_tokens_agreement in H1. destruct j.
                 -- simpl in H6. inversion H6. clear H6. simpl. intros Hcontr. destruct t1. 2: { inversion H7. } simpl in Hcontr.
                    clear IHfuel1 IHfuel2 H H0 H5 H7 H8 H4. specialize (nth_error_In _ _ H3) as Hin. specialize (H1 _ _ _ Hin).
-                   specialize (find_largest_prefix_opt dict ((firstn n0 (b :: s)) ++ [b0]) l n n0) as Hopt.
+                   specialize (find_largest_prefix_optimal dict ((firstn n0 (b :: s)) ++ [b0]) l n n0) as Hopt.
                    assert ((firstn n0 (b :: s) ++ [b0]) ++ l = b :: s). {
                     rewrite <- app_assoc. change ([b0] ++ l) with (b0 :: l). rewrite <- Hd2.
                     rewrite firstn_skipn. reflexivity.
@@ -328,32 +328,40 @@ Module Impl.
                        specialize (IHfuel2 i j t1 t2 ltac:(lia) H3 H5 H6 H7). assumption.
   Qed.
 
-  Definition different (l : list (list bool)) := forall i j a b,
-  i <> j -> nth_error l i = Some a -> nth_error l j = Some b -> a <> b.
+  Definition list_elements_distinct (l : list (list bool)) :=
+    forall i j a b,
+      i <> j ->
+      nth_error l i = Some a ->
+      nth_error l j = Some b ->
+      a <> b.
 
-  Definition equal_len_n (n : nat) (l : list bool) := if (length l =? n) then 1 else 0.
+  Definition length_le_n (n : nat) (l : list bool) :=
+    length l <=? n.
 
-  Definition equal_or_less_len_n (n : nat) (l : list bool) := (length l <=? n).
+  Definition count_geq_n (l : list nat) (n : nat) :=
+    list_sum (map (fun x => if (x <? n) then 0 else 1) l).
 
-  Definition amount_geq_n (l : list nat) (n : nat) := list_sum (map (fun x => if (x <? n) then 0 else 1) l).
-
-  Fixpoint gen_array (n : nat) := match n with
+  Fixpoint gen_seq_desc (n : nat) :=
+    match n with
     | 0 => []
-    | S x => S x :: (gen_array x)
+    | S x => S x :: (gen_seq_desc x)
     end.
 
-  Lemma comb_diff : forall a l,
-    different (a :: l) -> different l.
+  Lemma distinct_cons_inv : forall a l,
+    list_elements_distinct (a :: l) ->
+    list_elements_distinct l.
   Proof.
-    unfold different.
+    unfold list_elements_distinct.
     intros.
     apply (H (S i) (S j) a0 b); auto.
   Qed.
 
-  Lemma comb_diff_add : forall a b l,
-    different (a :: l) -> In b l -> a <> b.
+  Lemma distinct_cons_in_neq : forall a b l,
+    list_elements_distinct (a :: l) ->
+    In b l ->
+    a <> b.
   Proof.
-    unfold different.
+    unfold list_elements_distinct.
     intros.
     specialize (In_nth_error _ _ H0) as Hin.
     destruct Hin as (n & Hin).
@@ -361,44 +369,47 @@ Module Impl.
   Qed.
 
   (* TODO: Rewrite *)
-  Lemma comb_partition : forall l f l1 l2,
-    partition f l = (l1, l2) -> different l -> different l1 /\ different l2.
+  Lemma partition_preserves_distinct : forall l f l1 l2,
+    partition f l = (l1, l2) ->
+    list_elements_distinct l ->
+    list_elements_distinct l1 /\ list_elements_distinct l2.
   Proof.
     induction l.
-      - intros. unfold different. inversion H. subst. split; intros; rewrite nth_error_nil in H2; inversion H2.
+      - intros. unfold list_elements_distinct. inversion H. subst. split; intros; rewrite nth_error_nil in H2; inversion H2.
       - intros. simpl in H. destruct (f a) eqn:Hfa.
-        * destruct (partition f l) eqn:Hp. inversion H. subst. clear H. specialize (IHl f l0 l2 Hp). assert (different l). eapply comb_diff. exact H0.
+        * destruct (partition f l) eqn:Hp. inversion H. subst. clear H. specialize (IHl f l0 l2 Hp). assert (list_elements_distinct l). eapply distinct_cons_inv. exact H0.
           specialize (IHl H). split. 2: { destruct IHl as (_ & IHl). assumption. }
-          unfold different. intros. destruct i. destruct j.
+          unfold list_elements_distinct. intros. destruct i. destruct j.
             + auto.
             + simpl in H3. specialize (nth_error_In _ _ H3) as Hin. assert (In b l). eapply elements_in_partition. exact Hp. apply or_introl. exact Hin.
-              simpl in H2. inversion H2. subst. clear H2. eapply comb_diff_add. exact H0. exact H4.
+              simpl in H2. inversion H2. subst. clear H2. eapply distinct_cons_in_neq. exact H0. exact H4.
             + destruct j.
               -- simpl in H3. inversion H3. clear H3. subst. simpl in H2. specialize (nth_error_In _ _ H2) as Hin.
                  assert (In a0 l). eapply elements_in_partition. exact Hp. apply or_introl. assumption.
-                 symmetry. eapply comb_diff_add. exact H0. exact H3.
+                 symmetry. eapply distinct_cons_in_neq. exact H0. exact H3.
               -- simpl in H2. simpl in H3. destruct IHl as (IHl & _). eapply IHl. assert (i <> j). lia. exact H4.
                  exact H2. exact H3.
-        * destruct (partition f l) eqn:Hp. inversion H. subst. clear H. specialize (IHl f l1 l3 Hp). assert (different l). eapply comb_diff. exact H0.
+        * destruct (partition f l) eqn:Hp. inversion H. subst. clear H. specialize (IHl f l1 l3 Hp). assert (list_elements_distinct l). eapply distinct_cons_inv. exact H0.
           specialize (IHl H). split. destruct IHl as (IHl & _). assumption.
-          unfold different. intros. destruct i. destruct j.
+          unfold list_elements_distinct. intros. destruct i. destruct j.
             + auto.
             + simpl in H3. specialize (nth_error_In _ _ H3) as Hin. assert (In b l). eapply elements_in_partition. exact Hp. apply or_intror. exact Hin.
-              simpl in H2. inversion H2. subst. clear H2. eapply comb_diff_add. exact H0. exact H4.
+              simpl in H2. inversion H2. subst. clear H2. eapply distinct_cons_in_neq. exact H0. exact H4.
             + destruct j.
               -- simpl in H3. inversion H3. clear H3. subst. simpl in H2. specialize (nth_error_In _ _ H2) as Hin.
                  assert (In a0 l). eapply elements_in_partition. exact Hp. apply or_intror. assumption.
-                 symmetry. eapply comb_diff_add. exact H0. exact H3.
+                 symmetry. eapply distinct_cons_in_neq. exact H0. exact H3.
               -- simpl in H2. simpl in H3. destruct IHl as (_ & IHl). eapply IHl. assert (i <> j). lia. exact H4.
                  exact H2. exact H3.
   Qed.
 
-  Lemma filter_preserv_diff : forall l f,
-    different l -> different (filter f l).
+  Lemma filter_preserves_distinct : forall l f,
+    list_elements_distinct l ->
+    list_elements_distinct (filter f l).
   Proof.
     intros.
     destruct (partition f l) eqn:Hp.
-    specialize (comb_partition _ _ _ _ Hp H) as Hpart.
+    specialize (partition_preserves_distinct _ _ _ _ Hp H) as Hpart.
     specialize (partition_as_filter f l) as Hpf.
     rewrite Hpf in Hp.
     inversion Hp.
@@ -406,19 +417,23 @@ Module Impl.
     now destruct Hpart as (Hpart & _).
   Qed.
 
-  Definition split_func (l : list bool) := match l with
+  Definition split_func (l : list bool) :=
+    match l with
     | true :: lst => true
     | false :: lst => false
     | _ => true
     end.
 
-  Definition drop_first (l : list bool) := match l with
+  Definition drop_first (l : list bool) :=
+    match l with
     | _ :: y => y
     | _ => []
-  end.
+    end.
 
-  Lemma partition_forall: forall (l : list (list bool)) f p l1 l2,
-    partition f l = (l1, l2) -> Forall p l -> Forall p l1 /\ Forall p l2.
+  Lemma partition_preserves_forall: forall (l : list (list bool)) f p l1 l2,
+    partition f l = (l1, l2) ->
+    Forall p l ->
+    Forall p l1 /\ Forall p l2.
   Proof.
     intros.
     split; eapply Forall_forall; intros;
@@ -426,54 +441,78 @@ Module Impl.
     (now apply or_introl) || (now apply or_intror).
   Qed.
 
-  Lemma length_dec : forall l k l1,
+  Lemma drop_first_length_pred : forall l k l1,
     Forall (fun x : list bool => length x = S k) l ->
-    l1 = (map drop_first l) -> Forall (fun x : list bool => length x = k) l1.
+    l1 = map drop_first l ->
+    Forall (fun x : list bool => length x = k) l1.
   Proof.
     induction l; intros; subst; constructor; inversion H; subst.
     - destruct a; simpl in *; lia.
     - eapply IHl; auto.
   Qed.
 
-  (* TODO: Rewrite *)
-  Lemma diff_preserv : forall l (b : bool) l1,
-    different l -> Forall (fun x => match x with
-    | s :: _ => b = s
-    | _ => False
-    end) l -> l1 = (map drop_first l) -> different l1.
+  Lemma drop_first_preserves_distinct : forall l (b : bool) l1,
+    list_elements_distinct l ->
+    Forall (fun x => match x with
+                     | s :: _ => b = s
+                     | _ => False
+                     end) l ->
+    l1 = map drop_first l ->
+    list_elements_distinct l1.
   Proof.
-    intros. unfold different. intros. unfold different in H. specialize (H i j (b :: a) (b :: b0) H2).
-    remember (nth_error l i) as x. specialize (nth_error_map (drop_first) i l) as Hnth1.
-    subst. destruct (nth_error l i) eqn:Hd1. 2: { simpl in Hnth1. rewrite H3 in Hnth1. inversion Hnth1. }
-    simpl in Hnth1. rewrite H3 in Hnth1. inversion Hnth1. subst. specialize (nth_error_In _ _ Hd1) as Hin.
+    unfold list_elements_distinct.
+    intros.
+    specialize (H i j (b :: a) (b :: b0) H2).
+    remember (nth_error l i) as x.
+    specialize (nth_error_map (drop_first) i l) as Hnth1.
+    destruct (nth_error l i) eqn:Hd1; subst; simpl in *; rewrite H3 in Hnth1;
+    inversion Hnth1.
+    specialize (nth_error_In _ _ Hd1) as Hin.
     specialize (Forall_forall (fun x : list bool => match x with
-| [] => False
-| s :: _ => b = s
-end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destruct l0. simpl. auto. simpl in H. subst. specialize (H eq_refl).
-
-  remember (nth_error l j) as y. specialize (nth_error_map (drop_first) j l) as Hnth2.
-      subst. destruct (nth_error l j) eqn:Hd2. 2: { simpl in Hnth2. rewrite H4 in Hnth2. inversion Hnth2. }
-      simpl in Hnth2. rewrite H4 in Hnth2. inversion Hnth2. subst. specialize (nth_error_In _ _ Hd2) as Hin2.
+                                                    | [] => False
+                                                    | s :: _ => b = s
+                                                    end) l) as Hfor.
+    destruct Hfor as (Hfor & _).
+    specialize (Hfor H0 l0 Hin).
+    destruct l0; subst; simpl in *.
+    - auto.
+    - specialize (H eq_refl).
+      remember (nth_error l j) as y.
+      specialize (nth_error_map (drop_first) j l) as Hnth2.
+      subst.
+      destruct (nth_error l j) eqn:Hd2; simpl in Hnth2; rewrite H4 in Hnth2; inversion Hnth2.
+      subst.
+      specialize (nth_error_In _ _ Hd2) as Hin2.
       specialize (Forall_forall (fun x : list bool => match x with
-  | [] => False
-  | s :: _ => b1 = s
-  end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l1 Hin2). destruct l1. simpl. auto. simpl in H. subst. specialize (H eq_refl).
-
-     simpl. unfold "<>". intros. subst. auto.
+                                                      | [] => False
+                                                      | s :: _ => b1 = s
+                                                      end) l) as Hfor.
+      destruct Hfor as (Hfor & _).
+      specialize (Hfor H0 l1 Hin2).
+      destruct l1; subst; simpl in *.
+      + auto.
+      + specialize (H eq_refl).
+        unfold "<>".
+        intros.
+        subst.
+        auto.
   Qed.
 
 
   (* TODO: Rewrite *)
-  Lemma comb4 : forall k (l : list (list bool)), Forall (fun x => length x = k) l -> different l -> length l <= 2^k.
+  Lemma distinct_length_n_bound : forall k (l : list (list bool)),
+    Forall (fun x => length x = k) l ->
+    list_elements_distinct l ->
+    length l <= 2^k.
   Proof.
     induction k.
       - intros. change (2^0) with 1. destruct l. simpl. lia. simpl. inversion H. subst.
-        destruct l0. simpl. lia. unfold different in H0. inversion H4. subst. destruct l. 2 : { simpl in H3. lia. }
+        destruct l0. simpl. lia. unfold list_elements_distinct in H0. inversion H4. subst. destruct l. 2 : { simpl in H3. lia. }
         destruct l0. 2: { simpl in H5. lia. } simpl. specialize (H0 0 1 [] [] ltac:(lia) ltac:(constructor) ltac:(constructor)).
         exfalso. eapply H0. reflexivity.
       - intros. destruct (partition split_func l) as [l1 l2] eqn:Hspl.
         specialize (partition_as_filter split_func l) as Hfilt. assert ((Forall (fun x : list bool => length x = S k) l1) /\ (Forall (fun x : list bool => length x = S k) l2)) as Hlen.
-        eapply partition_forall. exact Hspl. exact H.
+        eapply partition_preserves_forall. exact Hspl. exact H.
         remember (map (fun x => match x with
           | _ :: y => y
           | _ => []
@@ -485,16 +524,16 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
         specialize (IHk l1') as IHk1.
         specialize (IHk l2') as IHk2.
         destruct Hlen as (Hlen1 & Hlen2).
-        assert (Forall (fun x : list bool => length x = k) l1'). eapply length_dec. exact Hlen1. exact Hr1.
+        assert (Forall (fun x : list bool => length x = k) l1'). eapply drop_first_length_pred. exact Hlen1. exact Hr1.
         specialize (IHk1 H1). clear H1.
-        assert (Forall (fun x : list bool => length x = k) l2'). eapply length_dec. exact Hlen2. exact Hr2.
+        assert (Forall (fun x : list bool => length x = k) l2'). eapply drop_first_length_pred. exact Hlen2. exact Hr2.
         specialize (IHk2 H1). clear H1.
 
         specialize (filter_In split_func) as Hfin1. specialize (Hfin1) with (l := l).
         rewrite Hspl in Hfilt. inversion Hfilt. clear Hfilt.
 
-        specialize (comb_partition _ _ _ _ Hspl H0) as Hdiff. destruct Hdiff as (Hdiff1 & Hdiff2).
-        assert (different l1'). eapply diff_preserv with (b := true). exact Hdiff1. apply Forall_forall. intros. rewrite <- H2 in Hfin1.
+        specialize (partition_preserves_distinct _ _ _ _ Hspl H0) as Hdiff. destruct Hdiff as (Hdiff1 & Hdiff2).
+        assert (list_elements_distinct l1'). eapply drop_first_preserves_distinct with (b := true). exact Hdiff1. apply Forall_forall. intros. rewrite <- H2 in Hfin1.
         specialize (Hfin1 x). destruct (Hfin1) as (Hfin11 & _). specialize (Hfin11 H1). destruct Hfin11 as (Hin3 & Hspltrue).
         unfold split_func in Hspltrue. destruct x.
           ++ specialize (Forall_forall (fun x : list bool => length x = S k) l1) as Hfor3. destruct Hfor3 as (Hfor3 & _).
@@ -505,7 +544,7 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
 
         specialize (filter_In (fun x : list bool => negb (split_func x))) as Hfin2. specialize (Hfin2) with (l := l).
 
-        assert (different l2'). eapply diff_preserv with (b := false). exact Hdiff2. apply Forall_forall. intros. rewrite <- H3 in Hfin2.
+        assert (list_elements_distinct l2'). eapply drop_first_preserves_distinct with (b := false). exact Hdiff2. apply Forall_forall. intros. rewrite <- H3 in Hfin2.
         specialize (Hfin2 x). destruct (Hfin2) as (Hfin11 & _). specialize (Hfin11 H4). destruct Hfin11 as (Hin3 & Hspltrue).
         unfold split_func in Hspltrue. destruct x.
           ** simpl in Hspltrue. inversion Hspltrue.
@@ -540,58 +579,58 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
     lia.
   Qed.
 
-  Lemma comb2 : forall n l,
-    different l ->
-    length (filter (equal_or_less_len_n n) l) <= 2^(n + 1) - 1.
+  Lemma distinct_length_le_n_bound : forall n l,
+    list_elements_distinct l ->
+    length (filter (length_le_n n) l) <= 2^(n + 1) - 1.
   Proof.
     induction n; intros.
     - change (2 ^ (0 + 1) - 1) with (2^0).
-      eapply comb4.
+      eapply distinct_length_n_bound.
       + eapply Forall_forall. intros.
-        specialize (filter_In (equal_or_less_len_n 0) x l) as Hin.
+        specialize (filter_In (length_le_n 0) x l) as Hin.
         destruct Hin as (Hin1 & _).
         specialize (Hin1 H0).
         destruct Hin1 as (_ & Hin1).
-        unfold equal_or_less_len_n in Hin1.
+        unfold length_le_n in Hin1.
         destruct x; simpl in *.
         * reflexivity.
         * discriminate.
-      + now apply filter_preserv_diff.
-    - destruct (partition (equal_or_less_len_n n) (filter (equal_or_less_len_n (S n)) l)) eqn:Hp.
+      + now apply filter_preserves_distinct.
+    - destruct (partition (length_le_n n) (filter (length_le_n (S n)) l)) eqn:Hp.
       specialize (IHn l0).
-      assert (different (filter (equal_or_less_len_n (S n)) l)) by now apply filter_preserv_diff.
-      specialize (comb_partition _ _ _ _ Hp H0) as Hpart.
+      assert (list_elements_distinct (filter (length_le_n (S n)) l)) by now apply filter_preserves_distinct.
+      specialize (partition_preserves_distinct _ _ _ _ Hp H0) as Hpart.
       destruct Hpart as (Hpart1 & Hpart2).
       specialize (IHn Hpart1).
-      specialize (comb4 (S n) l1 ) as Hexact.
+      specialize (distinct_length_n_bound (S n) l1 ) as Hexact.
       assert (Forall (fun x : list bool => length x = S n) l1). {
         eapply Forall_forall.
         intros.
-        assert (Forall (fun x => length x <= S n) (filter (equal_or_less_len_n (S n)) l) ). {
+        assert (Forall (fun x => length x <= S n) (filter (length_le_n (S n)) l) ). {
           apply Forall_forall.
           intros.
-          specialize (filter_In (equal_or_less_len_n (S n)) x0 l) as Hfin.
+          specialize (filter_In (length_le_n (S n)) x0 l) as Hfin.
           destruct Hfin as (Hfin1 & _).
           specialize (Hfin1 H2).
               destruct Hfin1 as (_ & Hfin1).
-              unfold equal_or_less_len_n in *.
+              unfold length_le_n in *.
               now apply leb_complete.
         }
-        specialize (partition_forall (filter (equal_or_less_len_n (S n)) l) (equal_or_less_len_n n)
+        specialize (partition_preserves_forall (filter (length_le_n (S n)) l) (length_le_n n)
                       (fun x : list bool => length x <= S n)) as Hpart_prop.
         specialize (Hpart_prop l0 l1 Hp H2).
-        specialize (partition_as_filter (equal_or_less_len_n n)
-                      (filter (equal_or_less_len_n (S n)) l)) as Hfilt.
+        specialize (partition_as_filter (length_le_n n)
+                      (filter (length_le_n (S n)) l)) as Hfilt.
         rewrite Hfilt in Hp.
         inversion Hp.
-        specialize (filter_In (fun x : list bool => negb (equal_or_less_len_n n x)) x
-                      (filter (equal_or_less_len_n (S n)) l)) as Hin.
+        specialize (filter_In (fun x : list bool => negb (length_le_n n x)) x
+                      (filter (length_le_n (S n)) l)) as Hin.
         destruct Hin as (Hin1 & _).
         rewrite H5 in Hin1.
         specialize (Hin1 H1).
         destruct Hin1 as (_ & Hin1).
         rewrite Bool.negb_true_iff in Hin1.
-        unfold equal_or_less_len_n in *.
+        unfold length_le_n in *.
         specialize (leb_complete_conv _ _ Hin1) as Hless.
         destruct Hpart_prop as (Hpart_prop1 & Hpart_prop2).
         rewrite Forall_forall in Hpart_prop2.
@@ -602,8 +641,8 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
       specialize (partition_length _ _ Hp) as Hlen.
       replace (S n + 1) with (S (S n)) by lia.
       rewrite Hlen, Nat.pow_succ_r'.
-      specialize (partition_as_filter (equal_or_less_len_n n)
-                   (filter (equal_or_less_len_n (S n)) l)) as Hfilt.
+      specialize (partition_as_filter (length_le_n n)
+                   (filter (length_le_n (S n)) l)) as Hfilt.
       rewrite Hp in Hfilt.
       inversion Hfilt.
       rewrite <- H4, <- H3.
@@ -614,33 +653,34 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
       lia.
   Qed.
 
-  Definition equal_or_greater_len_n (n : nat) (l : list bool) :=
+  Definition length_ge_n (n : nat) (l : list bool) :=
     n <=? length l.
 
-  Lemma diff_lb : forall n l,
-    (different l) -> length (filter (equal_or_greater_len_n n) l) >= length l + 1 - 2^(n).
+  Lemma distinct_length_ge_n_lower_bound : forall n l,
+    list_elements_distinct l ->
+    length (filter (length_ge_n n) l) >= length l + 1 - 2^(n).
   Proof.
     intros.
     destruct n.
     - replace (2^0) with 1.
       2: { rewrite Nat.pow_0_r. reflexivity. }
       replace (length l + 1 - 1) with (length l) by lia.
-      specialize (filter_length (equal_or_greater_len_n 0) l) as Hflt.
-      destruct (filter (fun x : list bool => negb (equal_or_greater_len_n 0 x))) eqn:Hd.
+      specialize (filter_length (length_ge_n 0) l) as Hflt.
+      destruct (filter (fun x : list bool => negb (length_ge_n 0 x))) eqn:Hd.
       simpl in Hd. simpl in Hflt. lia.
-      specialize (filter_In (fun x : list bool => negb (equal_or_greater_len_n 0 x)) l0 l) as Hin.
+      specialize (filter_In (fun x : list bool => negb (length_ge_n 0 x)) l0 l) as Hin.
       destruct Hin as (Hin1 & _).
       rewrite Hd in Hin1.
       simpl in Hin1. specialize (Hin1 ltac:(apply or_introl;reflexivity)).
       destruct Hin1 as (_ & Hin1).
       discriminate.
-    - destruct (partition (equal_or_greater_len_n (S n)) l) eqn:Hd.
-      specialize (partition_as_filter (equal_or_greater_len_n (S n)) l) as Hfilt.
-      specialize (filter_ext (fun x : list bool => negb (equal_or_greater_len_n (S n) x))
-                             (equal_or_less_len_n n)) as Hext.
+    - destruct (partition (length_ge_n (S n)) l) eqn:Hd.
+      specialize (partition_as_filter (length_ge_n (S n)) l) as Hfilt.
+      specialize (filter_ext (fun x : list bool => negb (length_ge_n (S n) x))
+                             (length_le_n n)) as Hext.
       assert ((forall a : list bool, (fun x : list bool =>
-                  negb (equal_or_greater_len_n (S n) x)) a = equal_or_less_len_n n a)). {
-        intros. unfold equal_or_greater_len_n, equal_or_less_len_n.
+                  negb (length_ge_n (S n) x)) a = length_le_n n a)). {
+        intros. unfold length_ge_n, length_le_n.
         rewrite <- Nat.ltb_antisym.
         destruct ((length a <? S n)) eqn:Hdd;
         [(rewrite Nat.ltb_lt in Hdd) | (rewrite Nat.ltb_ge in Hdd)]; symmetry;
@@ -648,8 +688,8 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
       }
       specialize (Hext H0).
       specialize (Hext l).
-      specialize (comb2 n l H) as Hdiff.
-      specialize (partition_length (equal_or_greater_len_n (S n)) l Hfilt) as Hlen.
+      specialize (distinct_length_le_n_bound n l H) as Hdiff.
+      specialize (partition_length (length_ge_n (S n)) l Hfilt) as Hlen.
       rewrite Hext in Hlen.
       rewrite Hlen.
       replace (S n) with (n + 1). 2: { lia. }
@@ -669,7 +709,7 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
       lia.
   Qed.
 
-  Lemma list_sum_dec : forall f (g : list bool -> nat) l,
+  Lemma list_sum_filter_le : forall f (g : list bool -> nat) l,
     list_sum (map g (filter f l)) <= list_sum (map g l).
   Proof.
     induction l; simpl.
@@ -677,20 +717,22 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
     - destruct (f a); simpl; lia.
   Qed.
 
-  Lemma arith1 : forall a b c,
-    a >= b -> c * a >= c * b.
+  Lemma mul_le_mono_l_nat : forall a b c,
+    a >= b ->
+    c * a >= c * b.
   Proof.
     intros.
     induction c; lia.
   Qed.
 
-  Lemma sum_of_at_least_k : forall l k,
-    (forall x, In x l -> (equal_or_greater_len_n k x) = true) -> list_sum (map (@length (bool)) l) >= k * (length l).
+  Lemma sum_length_ge_k_bound : forall l k,
+    (forall x, In x l -> (length_ge_n k x) = true) ->
+    list_sum (map (@length (bool)) l) >= k * (length l).
   Proof.
     intros.
     induction l; simpl in *.
     - lia.
-    - assert ((forall x : list bool, In x l -> equal_or_greater_len_n k x = true)). {
+    - assert ((forall x : list bool, In x l -> length_ge_n k x = true)). {
         intros.
         specialize (H x).
         now specialize (H ltac:(apply or_intror; assumption)).
@@ -698,17 +740,18 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
       specialize (IHl H0).
       specialize (H a).
       specialize (H ltac:(apply or_introl;reflexivity)).
-      unfold equal_or_greater_len_n in H.
+      unfold length_ge_n in H.
       rewrite Nat.leb_le in H.
       lia.
   Qed.
 
   Definition shift (f : nat -> nat) := fun x => f (x + 1).
 
-  Fixpoint sum_over (f : nat -> nat) (n : nat) := match n with
-  | 0 => 0
-  | S m => (f 0) + (sum_over (shift f) m)
-  end.
+  Fixpoint sum_over (f : nat -> nat) (n : nat) :=
+    match n with
+    | 0 => 0
+    | S m => (f 0) + (sum_over (shift f) m)
+    end.
 
   Lemma sum_row_sum_col : forall (n m : nat) (f : nat -> nat -> nat),
     sum_over (fun i => sum_over (f i) m) n = sum_over (fun j => sum_over (fun x => f x j) n) m.
@@ -731,7 +774,8 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
   Qed.
 
   Lemma sum_over_fg : forall m g1 g2,
-    (forall x, (g1 x) = (g2 x)) -> sum_over g1 m = sum_over g2 m.
+    (forall x, (g1 x) = (g2 x)) ->
+    sum_over g1 m = sum_over g2 m.
   Proof.
     induction m; intros; simpl.
     - reflexivity.
@@ -743,7 +787,8 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
   Qed.
 
   Lemma sum_over_f_leq_g : forall m g1 g2,
-    (forall x, (g1 x) <= (g2 x)) -> sum_over g1 m <= sum_over g2 m.
+    (forall x, (g1 x) <= (g2 x)) ->
+    sum_over g1 m <= sum_over g2 m.
   Proof.
     induction m; intros; simpl.
     - reflexivity.
@@ -779,13 +824,12 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
   Qed.
 
   Lemma sum_over_list_sum : forall n l m f,
-  length l = n ->
-    f =
-    (fun i j : nat =>
-    match nth_error l i with
-    | Some x => if j + 1 <=? length x then 1 else 0
-    | None => 0
-    end) ->
+    length l = n ->
+    f = (fun i j : nat =>
+            match nth_error l i with
+            | Some x => if j + 1 <=? length x then 1 else 0
+            | None => 0
+            end) ->
     sum_over (fun i : nat => sum_over (f i) (m)) (length l) <= list_sum (map (@length bool) l).
   Proof.
     induction n; intros; destruct l; simpl in *; try lia.
@@ -831,18 +875,19 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
     lia.
   Qed.
 
-  Lemma len_filt_sum_over : forall l x f,
+  Lemma length_filter_eq_sum_over : forall l x f,
     f = (fun i j : nat =>
-      match nth_error l i with
-      | Some x => if j + 1 <=? length x then 1 else 0
-      | None => 0
-      end) -> length (filter (equal_or_greater_len_n (x + 1)) l) = sum_over (fun x0 : nat => f x0 x) (length l).
+            match nth_error l i with
+            | Some x => if j + 1 <=? length x then 1 else 0
+            | None => 0
+            end) ->
+    length (filter (length_ge_n (x + 1)) l) = sum_over (fun x0 : nat => f x0 x) (length l).
   Proof.
     induction l; intros; simpl.
     - reflexivity.
     - rewrite H.
       simpl.
-      unfold equal_or_greater_len_n in *.
+      unfold length_ge_n in *.
       specialize (IHl x _ (eq_refl ((fun i j : nat =>
                                       match nth_error (l) i with
                                       | Some x => if j + 1 <=? length x then 1 else 0
@@ -853,7 +898,8 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
       all: assumption.
   Qed.
 
-  Lemma sum_const : forall k c, sum_over (fun _ => c) k = k * c.
+  Lemma sum_over_const : forall k c,
+    sum_over (fun _ => c) k = k * c.
   Proof.
     induction k; simpl; unfold shift; intros.
     - lia.
@@ -861,7 +907,7 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
       lia.
   Qed.
 
-  Lemma sum_sub : forall k f g,
+  Lemma sum_over_sub : forall k f g,
     (forall x, x < k -> g x <= f x) ->
     sum_over (fun x => f x - g x) k + sum_over g k = sum_over f k.
   Proof.
@@ -879,7 +925,8 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
       lia.
   Qed.
 
-  Lemma sum_mult_2 : forall k f, sum_over (fun x => 2 * f x) k = 2 * sum_over f k.
+  Lemma sum_over_mult_2 : forall k f,
+    sum_over (fun x => 2 * f x) k = 2 * sum_over f k.
   Proof.
     induction k; simpl; unfold shift; intros.
     - reflexivity.
@@ -887,7 +934,8 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
       lia.
   Qed.
 
-  Lemma sum_pow2 : forall k, sum_over (fun x => 2 ^ (x + 1)) k + 2 = 2 ^ (k + 1).
+  Lemma sum_over_pow2 : forall k,
+    sum_over (fun x => 2 ^ (x + 1)) k + 2 = 2 ^ (k + 1).
   Proof.
     induction k; simpl; unfold shift.
     - reflexivity.
@@ -897,12 +945,14 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
         reflexivity.
       }
       rewrite (sum_over_fg k _ _ H).
-      rewrite sum_mult_2.
+      rewrite sum_over_mult_2.
       change (2 ^ S (k + 1)) with (2 * 2 ^ (k + 1)).
       lia.
   Qed.
 
-  Lemma pow2_bound_all : forall n x, x < Nat.log2 n -> 2 ^ (x + 1) <= n + 1.
+  Lemma pow2_log2_bound : forall n x,
+    x < Nat.log2 n ->
+    2 ^ (x + 1) <= n + 1.
   Proof.
     intros n x Hx.
     destruct n; simpl in *.
@@ -916,7 +966,7 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
       lia.
   Qed.
 
-  Theorem main_sum : forall n : nat,
+  Theorem sum_over_log2_lower_bound : forall n : nat,
     sum_over (fun x : nat => n + 1 - 2 ^ (x + 1)) (Nat.log2 n) >= n * (Nat.log2 n - 2).
   Proof.
     intro n.
@@ -925,12 +975,12 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
     assert (Hbound: forall x, x < k -> 2 ^ (x + 1) <= n + 1). {
       intros x Hx.
       subst k.
-      now apply pow2_bound_all.
+      now apply pow2_log2_bound.
     }
 
-    pose proof (sum_sub k (fun _ => n + 1) (fun x => 2 ^ (x + 1)) Hbound) as Hsub.
-    rewrite sum_const in Hsub.
-    pose proof (sum_pow2 k) as Hpow2.
+    pose proof (sum_over_sub k (fun _ => n + 1) (fun x => 2 ^ (x + 1)) Hbound) as Hsub.
+    rewrite sum_over_const in Hsub.
+    pose proof (sum_over_pow2 k) as Hpow2.
 
     assert (H2n: 2 ^ (k + 1) <= 2 * n + 2). {
       subst k.
@@ -947,8 +997,8 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
     lia.
   Qed.
 
-  Lemma corr_lb : forall l,
-    different l ->
+  Lemma distinct_phrases_length_lower_bound : forall l,
+    list_elements_distinct l ->
     list_sum (map (@length (bool)) l) >= (length l) * (Nat.log2(length l) - 2).
   Proof.
     intros.
@@ -966,10 +1016,10 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
       assert ((forall x : nat, (fun x0 : nat => n + 1 - 2 ^ (x0 + 1)) x
                   <= (fun j : nat => sum_over (fun x0 : nat => f x0 j) n) x)). {
         intros.
-        specialize (diff_lb (x + 1) l H) as Hdifflb.
-        assert (length (filter (equal_or_greater_len_n (x + 1)) l)
+        specialize (distinct_length_ge_n_lower_bound (x + 1) l H) as Hdifflb.
+        assert (length (filter (length_ge_n (x + 1)) l)
                   = sum_over (fun x0 : nat => f x0 x) n). {
-          erewrite len_filt_sum_over.
+          erewrite length_filter_eq_sum_over.
           - now rewrite Heqn.
           - assumption.
         }
@@ -977,13 +1027,13 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
       }
       specialize (Hflg H0).
       assert (sum_over (fun x : nat => n + 1 - 2 ^ (x + 1)) (Nat.log2 n)
-                >= n * (Nat.log2 n - 2)) by apply main_sum.
+                >= n * (Nat.log2 n - 2)) by apply sum_over_log2_lower_bound.
       lia.
     }
     lia.
   Qed.
 
-  Lemma ind_bound {A : Type} : forall (l : list A) i x,
+  Lemma nth_error_implies_lt_length {A : Type} : forall (l : list A) i x,
     nth_error l i = Some x -> i < length l.
   Proof.
     induction l; intros; destruct i; simpl in *.
@@ -994,17 +1044,17 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
       lia.
   Qed.
 
-  Lemma comb (tokens: list Token) :
+  Lemma tokens_concat_length_lower_bound (tokens: list Token) :
     (forall ind phr, In (Last ind phr) tokens -> False) ->
-    (phrases_differ_one tokens) ->
-    length (concat (map get_phrase tokens)) >= (length tokens) * (Nat.log2 (length tokens) - 2).
+    phrases_differ_one tokens ->
+    length (concat (map get_phrase tokens)) >= length tokens * (Nat.log2 (length tokens) - 2).
   Proof.
     intros. remember (map (get_phrase) tokens) as l.
-    assert (different l). {
-      unfold different. intros. unfold phrases_differ_one in H0.
+    assert (list_elements_distinct l). {
+      unfold list_elements_distinct. intros. unfold phrases_differ_one in H0.
 
-      specialize (ind_bound _ _ _ H2) as Hi.
-      specialize (ind_bound _ _ _ H3) as Hj.
+      specialize (nth_error_implies_lt_length _ _ _ H2) as Hi.
+      specialize (nth_error_implies_lt_length _ _ _ H3) as Hj.
 
       specialize (length_map (get_phrase) tokens) as Hmapl.
       rewrite <- Heql in Hmapl.
@@ -1046,12 +1096,12 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
       inversion Hmap2. clear Hmap2.
       assumption.
     }
-    specialize (corr_lb l H1) as Hcor.
+    specialize (distinct_phrases_length_lower_bound l H1) as Hcor.
     rewrite length_concat. erewrite <- length_map. rewrite <- Heql. assumption.
   Qed.
 
-  Lemma all_but_last' : forall fuel dict s tokens,
-    compress' fuel dict s = tokens ->
+  Lemma compress_aux_no_last_in_removelast : forall fuel dict s tokens,
+    compress_aux fuel dict s = tokens ->
     (forall ind phr, In (Last ind phr) (removelast tokens) -> False).
   Proof.
     induction fuel; intros; simpl in *; subst.
@@ -1059,7 +1109,7 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
     - destruct s; simpl in *; trivial.
       destruct (find_largest_prefix dict (b :: s)).
       destruct (skipn n0 (b :: s)); subst; simpl in *; trivial.
-      destruct (compress' fuel (dict ++ [firstn n0 (b :: s) ++ [b0]]) l) eqn:Hd; simpl in *; trivial.
+      destruct (compress_aux fuel (dict ++ [firstn n0 (b :: s) ++ [b0]]) l) eqn:Hd; simpl in *; trivial.
       destruct H0 as [Ha | Hb].
       + inversion Ha.
       + destruct l0; simpl in *; trivial.
@@ -1068,13 +1118,13 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
         * exact Hb.
   Qed.
 
-  Lemma all_but_last : forall s tokens,
+  Lemma compress_no_last_in_removelast : forall s tokens,
     compress s = tokens ->
-      (forall ind phr, In (Last ind phr) (removelast tokens) -> False).
+    (forall ind phr, In (Last ind phr) (removelast tokens) -> False).
   Proof.
     intros.
     unfold compress in *.
-    eapply all_but_last'; eassumption.
+    eapply compress_aux_no_last_in_removelast; eassumption.
   Qed.
 
   Lemma removelast_len {A : Type} : forall (l : list A),
@@ -1085,14 +1135,15 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
     - destruct l; simpl in *; lia.
   Qed.
 
-  Lemma phrases_diff_her : forall l,
-    phrases_differ_one l -> phrases_differ_one (removelast l).
+  Lemma phrases_differ_one_removelast : forall l,
+    phrases_differ_one l ->
+    phrases_differ_one (removelast l).
   Proof.
     unfold phrases_differ_one in *.
     intros.
     specialize (H i j t1 t2 H0).
-    specialize (ind_bound _ _ _ H1) as Hi.
-    specialize (ind_bound _ _ _ H2) as Hj.
+    specialize (nth_error_implies_lt_length _ _ _ H1) as Hi.
+    specialize (nth_error_implies_lt_length _ _ _ H2) as Hj.
     specialize (removelast_len l) as He.
     specialize (removelast_firstn_len l) as Hlast.
     rewrite Hlast in H1.
@@ -1119,15 +1170,15 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
     assumption.
   Qed.
 
-  Lemma compress_bound: forall s tokens,
+  Lemma compress_length_lower_bound: forall s tokens,
     compress s = tokens ->
     length s >= (length tokens - 1) * (Nat.log2 (length tokens - 1) - 2).
   Proof.
     unfold compress.
     intros * Hc.
-    rewrite (compress'_eq_concat_phrases (length s) s empty_dict tokens
+    rewrite (compress_aux_eq_concat_phrases (length s) s empty_dict tokens
                ltac:(lia) ltac:(unfold empty_dict; now simpl) Hc).
-    specialize (all_but_last _ _ Hc) as H.
+    specialize (compress_no_last_in_removelast _ _ Hc) as H.
     assert (length (concat (map get_phrase tokens))
               >= length (concat (map get_phrase (removelast tokens)))). {
       clear.
@@ -1140,12 +1191,12 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
               (length (get_phrase a ++ concat (map get_phrase (removelast (t :: tokens))))).
             rewrite length_app. lia.
     }
-    specialize (comb (removelast tokens) H) as Hcomb.
-    pose proof (compress'_phrases_differ (length s) empty_dict s tokens [] ltac:(lia) Hc) as Hpd.
-    assert (agreement empty_dict []). { unfold agreement. intros. inversion H1. } specialize (Hpd H1).
+    specialize (tokens_concat_length_lower_bound (removelast tokens) H) as Hcomb.
+    pose proof (compress_aux_phrases_differ (length s) empty_dict s tokens [] ltac:(lia) Hc) as Hpd.
+    assert (dict_tokens_agreement empty_dict []). { unfold dict_tokens_agreement. intros. inversion H1. } specialize (Hpd H1).
     assert (nth_error empty_dict 0 = Some []). { simpl. reflexivity. } specialize (Hpd H2).
     destruct Hpd as (Hpd1 & Hpd2).
-    specialize (phrases_diff_her _ Hpd2) as Hpdp.
+    specialize (phrases_differ_one_removelast _ Hpd2) as Hpdp.
     specialize (Hcomb Hpdp).
     specialize (removelast_len tokens) as Hlen.
     assert (Nat.log2 (length (removelast tokens)) = Nat.log2 (length tokens - 1)). {
@@ -1156,7 +1207,8 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
 
 
   Lemma log2_10_n: forall x,
-    10 <= Nat.log2 x -> 1024 <= x.
+    10 <= Nat.log2 x ->
+    1024 <= x.
   Proof.
     intros * H.
     destruct (Nat.ltb x 1024) eqn:E.
@@ -1182,7 +1234,7 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
       lia.
   Qed.
 
-  Lemma log2_sq_bound: forall x,
+  Lemma log2_square_upper_bound: forall x,
     0 < x ->
     Nat.log2 (x * x) <= 2 * Nat.log2 x + 1.
   Proof.
@@ -1200,7 +1252,7 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
     lia.
   Qed.
 
-  Lemma sq_le_pow2: forall m,
+  Lemma square_le_pow2: forall m,
     4 <= m ->
     m * m <= 2 ^ m.
   Proof.
@@ -1223,30 +1275,32 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
     now simpl in H1.
   Qed.
 
-  Lemma log2_sq_le: forall x,
+  Lemma log2_square_le: forall x,
     16 <= x ->
     Nat.log2 x * Nat.log2 x <= x.
   Proof.
     intros * H.
     assert (4 <= Nat.log2 x) by (apply log2_4_16; lia).
-    pose proof (sq_le_pow2 (Nat.log2 x) H0).
+    pose proof (square_le_pow2 (Nat.log2 x) H0).
     assert (0 < x) by lia.
     pose proof (Nat.log2_spec x H2) as [H3 _].
     lia.
   Qed.
 
-  Lemma log2_le_n : forall x,
+  Lemma log2_le : forall x,
     16 <= x ->
     Nat.log2 x <= x.
   Proof.
     intros x H.
-    pose proof (log2_sq_le x H).
+    pose proof (log2_square_le x H).
     assert (4 <= Nat.log2 x) by (apply log2_4_16; lia).
     nia.
   Qed.
 
-  Lemma sq_le_mono: forall n m k,
-    n <= k -> m <= k -> n * m <= k * k.
+  Lemma square_le_mono: forall n m k,
+    n <= k ->
+    m <= k ->
+    n * m <= k * k.
   Proof. intros. nia. Qed.
 
   Section AsymptoticBound.
@@ -1272,7 +1326,7 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
       assert (n <= k) by nia.
       assert (Nat.log2 n <= Nat.log2 k) by (apply Nat.log2_le_mono; lia).
       assert (16 <= k) by lia.
-      pose proof (log2_sq_le k ltac:(assumption)).
+      pose proof (log2_square_le k ltac:(assumption)).
       nia.
     Qed.
 
@@ -1286,7 +1340,7 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
         assert (Nat.log2 k <= 2 * Nat.log2 n + 1). {
           apply Nat.le_trans with (m := Nat.log2 (n * n)).
           - apply Nat.log2_le_mono; lia.
-          - apply log2_sq_bound; lia.
+          - apply log2_square_upper_bound; lia.
         }
         assert (n * Nat.log2 k <= 2 * n * Nat.log2 n + n) by nia.
         assert (n * Nat.log2 n <= k + 3 * n + Nat.log2 n). {
@@ -1294,7 +1348,7 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
           remember (Nat.log2 n) as L.
           lia.
         }
-        assert (Nat.log2 n <= n) by (apply log2_le_n; lia).
+        assert (Nat.log2 n <= n) by (apply log2_le; lia).
         assert (7 * n <= k + 7). {
           assert (7 <= Nat.log2 n - 3) by lia.
           assert (7 * (n - 1) <= (n - 1) * (Nat.log2 n - 3)). {
@@ -1305,9 +1359,9 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
         }
         lia.
       - apply Nat.ltb_ge in E_k.
-        pose proof (log2_sq_le k H_k_16).
+        pose proof (log2_square_le k H_k_16).
         assert (Hsquare: (n * Nat.log2 k) ^ 2 <= (4 * k) ^ 2). {
-          pose proof (sq_le_mono (n * n) (Nat.log2 k * Nat.log2 k) (4 * k) ltac:(lia) ltac:(lia)).
+          pose proof (square_le_mono (n * n) (Nat.log2 k * Nat.log2 k) (4 * k) ltac:(lia) ltac:(lia)).
           do 2 rewrite Nat.pow_2_r in *.
           lia.
         }
@@ -1316,7 +1370,7 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
         + lia.
     Qed.
 
-    Theorem final_bound : m * Nat.log2 k <= k * Nat.log2 k + 21 * k.
+    Theorem final_bound: m * Nat.log2 k <= k * Nat.log2 k + 21 * k.
     Proof.
       pose proof algebraic_bound.
       pose proof bound_n.
@@ -1324,7 +1378,7 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
       nia.
     Qed.
 
-    Theorem final_division_bound : m <= k + 21 * k / Nat.log2 k.
+    Theorem final_division_bound: m <= k + 21 * k / Nat.log2 k.
     Proof.
       pose proof final_bound.
       assert (Hlk: Nat.log2 k <> 0) by lia.
@@ -1343,14 +1397,14 @@ end) l) as Hfor. destruct Hfor as (Hfor & _). specialize (Hfor H0 l0 Hin). destr
     length (compress_to_bits s) <= k + 21 * k / Nat.log2 k.
   Proof.
     intros * Hn Hngt Hk Hkgt.
-    pose proof (compress_bound s (compress s) ltac:(reflexivity)) as Hkn.
+    pose proof (compress_length_lower_bound s (compress s) ltac:(reflexivity)) as Hkn.
     unfold ">=" in Hkn.
-    pose proof (tokens_to_bits'_length_bound (compress' (length s) empty_dict s) 1
-                 (1 + length (compress' (length s) empty_dict s)) ltac:(lia)) as Hmn.
+    pose proof (tokens_to_bits_aux_length_bound (compress_aux (length s) empty_dict s) 1
+                 (1 + length (compress_aux (length s) empty_dict s)) ltac:(lia)) as Hmn.
     unfold compress_to_bits, compress, tokens_to_bits, num_bits_for_dict in *.
     rewrite <- Hk in *.
     rewrite <- Hn in *.
-    set (m := length (tokens_to_bits' 1 (compress' k empty_dict s))) in *.
+    set (m := length (tokens_to_bits_aux 1 (compress_aux k empty_dict s))) in *.
     destruct (1 + n <=? 1) eqn:?.
     - apply leb_complete in Heqb.
       lia.

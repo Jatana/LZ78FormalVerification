@@ -18,7 +18,7 @@ Module Tokens.
     | [] => True
     end.
 
-  Definition agreement (dict: dict_type) (tokens: list Token) :=
+  Definition dict_tokens_agreement (dict: dict_type) (tokens: list Token) :=
     forall index phr next,
       In (Tok index phr next) tokens ->
       In (phr ++ [next]) dict.
@@ -39,7 +39,8 @@ Module Tokens.
     forall i j t1 t2,
       nth_error tokens i = Some t1 ->
       nth_error tokens' j = Some t2 ->
-      not_last t1 -> not_last t2 ->
+      not_last t1 ->
+      not_last t2 ->
       get_phrase t1 <> get_phrase t2.
 
   Definition phrases_differ_one (tokens: list Token) :=
@@ -47,7 +48,8 @@ Module Tokens.
       (i <> j) ->
       nth_error tokens i = Some t1 ->
       nth_error tokens j = Some t2 ->
-      not_last t1 -> not_last t2 ->
+      not_last t1 ->
+      not_last t2 ->
       get_phrase t1 <> get_phrase t2.
 
   Fixpoint nat_to_k_bits (k n : nat) : list bool :=
@@ -56,7 +58,7 @@ Module Tokens.
       | S t => (if (n mod 2) =? 0 then false else true) :: nat_to_k_bits t (n / 2)
     end.
 
-  Definition to_nat (b : bool) : nat :=
+  Definition bool_to_nat (b : bool) : nat :=
     match b with
       | true => 1
       | false => 0
@@ -65,23 +67,23 @@ Module Tokens.
   Fixpoint k_bits_to_nat (bits: list bool) :=
     match bits with
     | [] => 0
-    | b :: rest => to_nat b + 2 * k_bits_to_nat rest
+    | b :: rest => bool_to_nat b + 2 * k_bits_to_nat rest
     end.
 
-  Fixpoint tokens_to_bits' (dict_size: nat) (tokens: list Token) :=
+  Fixpoint tokens_to_bits_aux (dict_size: nat) (tokens: list Token) :=
     match tokens with
     | [] => []
     | Tok index phr next :: rest =>
         nat_to_k_bits (num_bits_for_dict dict_size) index ++ [next] ++
-        tokens_to_bits' (S dict_size) rest
+        tokens_to_bits_aux (S dict_size) rest
     | Last index _ :: _ =>
         nat_to_k_bits (num_bits_for_dict dict_size) index
     end.
 
   Definition tokens_to_bits (tokens: list Token) :=
-    tokens_to_bits' 1 tokens.
+    tokens_to_bits_aux 1 tokens.
 
-  Fixpoint bits_to_tokens' (fuel dict_size: nat) (bits: list bool) : list Token :=
+  Fixpoint bits_to_tokens_aux (fuel dict_size: nat) (bits: list bool) : list Token :=
     match fuel, bits with
     | 0, _ => []
     | _, [] => []
@@ -94,19 +96,19 @@ Module Tokens.
           match skipn k bits with
           | [] => [Last (k_bits_to_nat index_bits) []]
           | next :: rest =>
-              Tok (k_bits_to_nat index_bits) [] next :: (bits_to_tokens' fuel (S dict_size) rest)
+              Tok (k_bits_to_nat index_bits) [] next :: (bits_to_tokens_aux fuel (S dict_size) rest)
           end
     end.
 
   Definition bits_to_tokens (bits: list bool) :=
-    bits_to_tokens' (length bits) 1 bits.
+    bits_to_tokens_aux (length bits) 1 bits.
 
 
-  Lemma agreement_app : forall dict tokens phr next n,
-    agreement dict tokens ->
-    agreement (dict ++ [phr ++ [next]]) (tokens ++ [Tok n phr next]).
+  Lemma dict_tokens_agreement_app : forall dict tokens phr next n,
+    dict_tokens_agreement dict tokens ->
+    dict_tokens_agreement (dict ++ [phr ++ [next]]) (tokens ++ [Tok n phr next]).
   Proof.
-    unfold agreement.
+    unfold dict_tokens_agreement.
     intros.
     apply in_or_app.
     specialize (in_app_or _ _ _ H0) as Hcase.
@@ -119,7 +121,7 @@ Module Tokens.
 
   Lemma nat_to_bit_correctness: forall n,
     n < 2 ->
-    to_nat (if n =? 0 then false else true) = n.
+    bool_to_nat (if n =? 0 then false else true) = n.
   Proof.
     intros.
     do 2 (destruct n; try reflexivity).
@@ -166,18 +168,18 @@ Module Tokens.
       | (Last ind1 _, Last ind2 _) => ind1 = ind2
     end.
 
-  Fixpoint list_eq {A : Type} (eqb : A -> A -> Prop) (s t : list A) : Prop :=
+  Fixpoint list_eqiv {A : Type} (eqb : A -> A -> Prop) (s t : list A) : Prop :=
     match (s, t) with
-    | (cons s1 s2, cons t1 t2) => (eqb s1 t1) /\ (list_eq eqb s2 t2)
+    | (cons s1 s2, cons t1 t2) => (eqb s1 t1) /\ (list_eqiv eqb s2 t2)
     | (nil, nil) => True
     | _ => False
     end.
 
-  Lemma tokens_to_bits_correctness': forall fuel tokens dict_size bits,
+  Lemma tokens_to_bits_correctness_aux: forall fuel tokens dict_size bits,
     length bits <= fuel ->
     valid_tokens tokens dict_size ->
-    tokens_to_bits' dict_size tokens = bits ->
-    list_eq token_equiv (bits_to_tokens' fuel dict_size bits) (tokens).
+    tokens_to_bits_aux dict_size tokens = bits ->
+    list_eqiv token_equiv (bits_to_tokens_aux fuel dict_size bits) tokens.
   Proof.
     induction fuel; simpl; intros * Hlen Hvt Htb.
     - destruct tokens. reflexivity.
@@ -281,10 +283,10 @@ Module Tokens.
 
   Lemma tokens_to_bits_correctness: forall tokens,
     valid_tokens tokens 1 ->
-    list_eq token_equiv (bits_to_tokens (tokens_to_bits tokens)) tokens.
+    list_eqiv token_equiv (bits_to_tokens (tokens_to_bits tokens)) tokens.
   Proof.
     intros.
-    eapply tokens_to_bits_correctness'.
+    eapply tokens_to_bits_correctness_aux.
     - lia.
     - assumption.
     - reflexivity.

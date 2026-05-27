@@ -4,18 +4,18 @@ Import ListNotations.
 
 Module Matching.
 
-  Fixpoint find_match' {A : Type} (eqb : A -> A -> bool) (s t : list A) (p : nat) : option nat :=
+  Fixpoint find_match_aux {A : Type} (eqb : A -> A -> bool) (s t : list A) (p : nat) : option nat :=
     if (list_eqb eqb (slice p (length t) s) t)
     then Some p
     else match p with
-         | S q => find_match' eqb s t q
+         | S q => find_match_aux eqb s t q
          | 0 => None
          end.
 
   Definition find_match {A : Type} (eqb : A -> A -> bool) (s t : list A) : option nat :=
-    find_match' eqb s t (length s).
+    find_match_aux eqb s t (length s).
 
-  Fixpoint find_largest_match' (before after: list byte) (l : nat) : option (nat * nat) :=
+  Fixpoint find_largest_match_aux (before after: list byte) (l : nat) : option (nat * nat) :=
     match l with
     | 2 => None
     | 1 => None
@@ -24,14 +24,14 @@ Module Matching.
         let suff := (slice ((length before) - 4098) 4098 before) in
         let m := find_match Byte.eqb suff (slice 0 l after) in
         match m with
-        | None => find_largest_match' before after k
+        | None => find_largest_match_aux before after k
         | Some p => Some (l, (length suff) - p)
         end
     end.
 
   (* returns 3 <= length <= 18, 3 <= offset <= 4098 *)
   Definition find_largest_match (before after: list byte): option (nat * nat) :=
-    find_largest_match' before after (min (length after) 18).
+    find_largest_match_aux before after (min (length after) 18).
 
   Definition one : byte := "1"%byte.
   Definition zero : byte := "0"%byte.
@@ -43,8 +43,8 @@ Module Matching.
   Proof. reflexivity. Qed.
 
 
-  Lemma find_match_corr' {A : Type} (eqb : A -> A -> bool) (s t : list A) (n p : nat) :
-    find_match' eqb s t p = Some n ->
+  Lemma find_match_correctness_aux {A : Type} (eqb : A -> A -> bool) (s t : list A) (n p : nat) :
+    find_match_aux eqb s t p = Some n ->
     list_eqb eqb (slice n (length t) s) t = true.
   Proof.
     induction p; simpl; intros;
@@ -59,29 +59,29 @@ Module Matching.
     - eapply IHp. assumption.
   Qed.
 
-  Lemma find_match_corr {A : Type} (eqb : A -> A -> bool) (s t : list A) (n : nat) :
+  Lemma find_match_correctness {A : Type} (eqb : A -> A -> bool) (s t : list A) (n : nat) :
     find_match eqb s t = Some n ->
     list_eqb eqb (slice n (length t) s) t = true /\
     ((length t >= 1) -> n <= length s - length t).
   Proof.
     assert (H: find_match eqb s t = Some n -> list_eqb eqb (slice n (length t) s) t = true). {
       intros.
-      eapply find_match_corr'.
+      eapply find_match_correctness_aux.
       unfold find_match in *.
       eassumption.
     }
     intro H0.
     specialize (H H0).
     pose proof (equality_implies_length_eq eqb (slice n (length t) s) t H) as H2.
-    rewrite slice_size in H2.
+    rewrite length_slice in H2.
     split.
     - assumption.
     - lia.
   Qed.
 
-  Lemma find_largest_match_corr1' : forall s t l len off,
+  Lemma find_largest_match_length_bounds_aux : forall s t l len off,
     l <= 18 ->
-    find_largest_match' s t l = Some (len, off) ->
+    find_largest_match_aux s t l = Some (len, off) ->
     3 <= len <= 18.
   Proof.
     intros s t l. revert s t.
@@ -96,18 +96,18 @@ Module Matching.
              + eassumption.
   Qed.
 
-  Lemma find_largest_match_corr1 : forall s t len off,
+  Lemma find_largest_match_length_bounds : forall s t len off,
     find_largest_match s t = Some (len, off) ->
     3 <= len <= 18.
   Proof.
     intros. unfold find_largest_match in *.
     assert (Nat.min (length t) 18 <= 18) by lia.
-    eapply find_largest_match_corr1'; eassumption.
+    eapply find_largest_match_length_bounds_aux; eassumption.
   Qed.
 
-  Lemma find_largest_match_corr2' : forall s t l len off,
+  Lemma find_largest_match_offset_bounds_aux : forall s t l len off,
     length t >= 3 ->
-    find_largest_match' s t l = Some (len, off) ->
+    find_largest_match_aux s t l = Some (len, off) ->
     3 <= off <= 4098.
   Proof.
     intros s t l. revert s t.
@@ -119,10 +119,10 @@ Module Matching.
       destruct (find_match eqb suff pref) eqn:Hd.
       + inversion H0. split.
         * assert (list_eqb Byte.eqb (slice n (length pref) suff) pref = true) by
-            (now apply find_match_corr).
+            (now apply find_match_correctness).
           specialize (equality_implies_length_eq eqb (slice n (length pref) suff) pref H1) as Heq.
           assert (length pref = length (slice 0 (S (S (S l))) t)) by (now f_equal).
-          specialize (slice_size t 0 (S (S (S l)))) as Hsize.
+          specialize (length_slice t 0 (S (S (S l)))) as Hsize.
           rewrite <- H4 in Hsize.
           assert ((length pref) >= 3). {
             destruct pref.
@@ -142,26 +142,26 @@ Module Matching.
                 * simpl. lia.
           }
           assert (length (slice n (length pref) suff) >= 3) by lia.
-          specialize (slice_size suff n (length pref)) as Hslice.
+          specialize (length_slice suff n (length pref)) as Hslice.
           rewrite Hslice in H6. lia.
-        * specialize (slice_size s (length s - 4098) 4098) as HH.
+        * specialize (length_slice s (length s - 4098) 4098) as HH.
           assert (length suff = length (slice (length s - 4098) 4098 s)) by (now f_equal).
           rewrite <- H1 in HH. lia.
       + eapply IHl; eassumption.
   Qed.
 
-  Lemma find_largest_match_corr2 : forall s t len off,
+  Lemma find_largest_match_offset_bounds : forall s t len off,
     find_largest_match s t = Some (len, off) ->
     3 <= off <= 4098.
   Proof.
     intros. unfold find_largest_match in *.
     do 3 try destruct t; try discriminate.
     assert (length (b :: b0 :: b1 :: t) >= 3) by (simpl; lia).
-    eapply find_largest_match_corr2'; eassumption.
+    eapply find_largest_match_offset_bounds_aux; eassumption.
   Qed.
 
-  Lemma find_largest_match_corr3' (s t : list byte) (n l len off : nat) :
-    find_largest_match' s t l = Some (len, off) ->
+  Lemma find_largest_match_eq_aux (s t : list byte) (n l len off : nat) :
+    find_largest_match_aux s t l = Some (len, off) ->
     l <= length t ->
     list_eqb Byte.eqb (slice ((length s) - off) len s) (slice 0 len t) = true /\
     len <= length t.
@@ -175,32 +175,32 @@ Module Matching.
       + inversion H; subst. clear H.
         remember (slice (length s - 4098) 4098 s) as suff.
         remember (slice 0 (S (S (S l))) t) as pref.
-        specialize (find_match_corr Byte.eqb suff pref n0 Hd) as Hslice.
+        specialize (find_match_correctness Byte.eqb suff pref n0 Hd) as Hslice.
         specialize (slice_slice s (length s - 4098) 4098 n0 (length pref)) as Hdouble.
         rewrite Heqsuff in Hslice. rewrite Hdouble in Hslice.
         destruct Hslice as (Hslice1 & Hslice2).
         assert (length t >= 3) by lia.
         assert (length pref >= 1). {
-          specialize (slice_size t 0 (S (S (S l)))) as Hpref_size.
+          specialize (length_slice t 0 (S (S (S l)))) as Hpref_size.
           rewrite <- Heqpref in Hpref_size.
           lia.
         }
         specialize (Hslice2 H1).
         rewrite <- Heqsuff in Hslice2.
         assert ((length s - (length suff - n0)) = (length s - 4098 + n0)). {
-          specialize (slice_size s (length s - 4098) 4098) as Hsuff_size.
+          specialize (length_slice s (length s - 4098) 4098) as Hsuff_size.
           rewrite <- Heqsuff in Hsuff_size.
           lia.
         }
         rewrite H2.
         assert (length pref = (S (S (S l)))).
-        specialize (slice_size t 0 (S (S (S l)))) as Hpref_size.
+        specialize (length_slice t 0 (S (S (S l)))) as Hpref_size.
         rewrite <- Heqpref in Hpref_size. lia.
         rewrite H3 in Hslice1.
         assert ((4098 - n0) >= length pref). {
           specialize (equality_implies_length_eq Byte.eqb (slice (length s - 4098 + n0)
                      (Nat.min (S (S (S l))) (4098 - n0)) s) pref Hslice1) as Hlength_eq.
-          specialize (slice_size s (length s - 4098 + n0) (Nat.min (S (S (S l))) (4098 - n0))) as Hlen.
+          specialize (length_slice s (length s - 4098 + n0) (Nat.min (S (S (S l))) (4098 - n0))) as Hlen.
           rewrite Hlen in Hlength_eq.
           lia.
         }
@@ -211,12 +211,12 @@ Module Matching.
       + apply IHl; assumption || lia.
   Qed.
 
-  Lemma find_largest_match_corr3 (s t : list byte) (len off : nat) :
+  Lemma find_largest_match_eq (s t : list byte) (len off : nat) :
     find_largest_match s t = Some (len, off) ->
     list_eqb Byte.eqb (slice ((length s) - off) len s) (slice 0 len t) = true /\ len <= length t.
   Proof.
     intros. unfold find_largest_match in H.
-    eapply find_largest_match_corr3'.
+    eapply find_largest_match_eq_aux.
     - eassumption.
     - eassumption.
     - lia.

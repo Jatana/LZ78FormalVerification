@@ -11,25 +11,25 @@ Module Dict.
     if dict_size <=? 1 then 1
     else (Nat.log2 (dict_size - 1)) + 1.
 
-  Fixpoint prefix_eq (p s: list bool) :=
+  Fixpoint prefix_eqb (p s: list bool) :=
     match p, s with
     | [], _ => true
     | _, [] => false
-    | ph :: pt, sh :: st => if eqb ph sh then prefix_eq pt st else false
+    | ph :: pt, sh :: st => if eqb ph sh then prefix_eqb pt st else false
     end.
 
-  Fixpoint find_largest_prefix' (dict: dict_type) (s: list bool) (index best_index best_len: nat) :=
+  Fixpoint find_largest_prefix_aux (dict: dict_type) (s: list bool) (index best_index best_len: nat) :=
     match dict with
     | [] => (best_index, best_len)
     | d :: ds =>
         let l := length d in
-        if andb (prefix_eq d s) (best_len <? l) then
-          find_largest_prefix' ds s (S index) index l
-        else find_largest_prefix' ds s (S index) best_index best_len
+        if andb (prefix_eqb d s) (best_len <? l) then
+          find_largest_prefix_aux ds s (S index) index l
+        else find_largest_prefix_aux ds s (S index) best_index best_len
     end.
 
   Definition find_largest_prefix (dict: dict_type) (s: list bool) :=
-    find_largest_prefix' dict s 0 0 0.
+    find_largest_prefix_aux dict s 0 0 0.
 
 
   Lemma num_bits_for_dict_lower_bound: forall n,
@@ -63,8 +63,8 @@ Module Dict.
     destruct (dict_size <=? 1); lia.
   Qed.
 
-  Lemma prefix_eq_correctness: forall p s,
-    prefix_eq p s = true <-> firstn (length p) s = p.
+  Lemma prefix_eqb_correctness: forall p s,
+    prefix_eqb p s = true <-> firstn (length p) s = p.
   Proof.
     induction p; simpl; intros.
     - tauto.
@@ -85,8 +85,8 @@ Module Dict.
           contradiction.
   Qed.
 
-  Lemma find_largest_prefix_correctness': forall ds dict s index bindex blen oindex olen,
-    find_largest_prefix' ds s index bindex blen = (oindex, olen) ->
+  Lemma find_largest_prefix_correctness_aux: forall ds dict s index bindex blen oindex olen,
+    find_largest_prefix_aux ds s index bindex blen = (oindex, olen) ->
     nth_error dict bindex = Some (firstn blen s) ->
     blen <= length s ->
     (forall i, nth_error ds i = nth_error dict (index + i)) ->
@@ -95,9 +95,9 @@ Module Dict.
     induction ds; intros * Hflp Hnth Hlen Hfa; simpl in *.
     - inversion Hflp. subst.
       tauto.
-    - destruct (prefix_eq a s && (blen <? length a))%bool eqn:?.
+    - destruct (prefix_eqb a s && (blen <? length a))%bool eqn:?.
       + apply andb_prop in Heqb as [Hpr Hblen].
-        apply prefix_eq_correctness in Hpr.
+        apply prefix_eqb_correctness in Hpr.
         rewrite Nat.ltb_lt in Hblen.
         eapply IHds.
         * eassumption.
@@ -129,21 +129,21 @@ Module Dict.
   Proof.
     unfold find_largest_prefix.
     intros * Hflp Hfst.
-    pose proof (find_largest_prefix_correctness' dict dict s 0 0 0 index len Hflp) as Hs.
+    pose proof (find_largest_prefix_correctness_aux dict dict s 0 0 0 index len Hflp) as Hs.
     simpl in *.
     specialize (Hs Hfst ltac:(lia)).
     auto.
   Qed.
 
-  Lemma find_largest_prefix_corr1' : forall dict s index best_index best_len n l,
-    find_largest_prefix' dict s index best_index best_len = (n, l) ->
+  Lemma find_largest_prefix_length_bound_aux : forall dict s index best_index best_len n l,
+    find_largest_prefix_aux dict s index best_index best_len = (n, l) ->
     l >= best_len.
   Proof.
     induction dict; intros * Hflp; simpl in *.
     - inversion Hflp.
       lia.
     - destruct (best_len <? length a) eqn:Hineq.
-        + destruct (prefix_eq a s && true).
+        + destruct (prefix_eqb a s && true).
           * rewrite Nat.ltb_lt in Hineq.
             assert (l >= length a).
             -- eapply IHdict.
@@ -152,46 +152,46 @@ Module Dict.
           * eapply IHdict.
             eassumption.
         + rewrite Nat.ltb_ge in Hineq.
-          replace (prefix_eq a s && false) with false in Hflp.
+          replace (prefix_eqb a s && false) with false in Hflp.
           eapply IHdict.
           eassumption.
-          destruct (prefix_eq a s); auto.
+          destruct (prefix_eqb a s); auto.
   Qed.
 
-  Lemma find_largest_prefix_opt': forall dict s t index best_index best_len n l,
-    find_largest_prefix' dict (s ++ t) index best_index best_len = (n, l) ->
+  Lemma find_largest_prefix_optimalimal_aux: forall dict s t index best_index best_len n l,
+    find_largest_prefix_aux dict (s ++ t) index best_index best_len = (n, l) ->
     In s dict ->
     l >= length s.
   Proof.
     induction dict; intros * Hflp Hin; inversion Hin; subst; simpl in *.
-    - assert (Ht: prefix_eq s (s ++ t) = true).
-      + apply prefix_eq_correctness.
+    - assert (Ht: prefix_eqb s (s ++ t) = true).
+      + apply prefix_eqb_correctness.
         replace (length s) with (length s + 0) by ltac:(lia).
         erewrite firstn_app_2.
         now rewrite app_nil_r.
       + rewrite Ht in Hflp.
         destruct (best_len <? length s) eqn:Hbound; simpl in *.
         * rewrite Nat.ltb_lt in Hbound.
-               eapply find_largest_prefix_corr1'.
+               eapply find_largest_prefix_length_bound_aux.
                eassumption.
         * replace (true && false) with false in Hflp by auto.
           rewrite Nat.ltb_ge in Hbound.
           assert (l >= best_len). {
-            eapply find_largest_prefix_corr1'.
+            eapply find_largest_prefix_length_bound_aux.
             eassumption.
           }
           lia.
-    - destruct (prefix_eq a (s ++ t) && (best_len <? length a));
+    - destruct (prefix_eqb a (s ++ t) && (best_len <? length a));
       eapply IHdict; eassumption.
   Qed.
 
-  Lemma find_largest_prefix_opt: forall dict s t index len,
+  Lemma find_largest_prefix_optimal: forall dict s t index len,
     find_largest_prefix dict (s ++ t) = (index, len) ->
     In s dict ->
     len >= length s.
   Proof.
     intros. unfold find_largest_prefix in *.
-    eapply find_largest_prefix_opt'; eassumption.
+    eapply find_largest_prefix_optimalimal_aux; eassumption.
   Qed.
 
 

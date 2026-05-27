@@ -4,29 +4,29 @@ Import ListNotations.
 
 Module Impl.
 
-  Fixpoint compress' (before after: list byte) (l: nat): list Token :=
+  Fixpoint compress_aux (before after: list byte) (l: nat): list Token :=
     match after, l with
     | [], _ => []
     | hd :: tl, 0 =>
         match (find_largest_match before after) with
-        | None => Lit hd :: compress' (before ++ [hd]) tl 0
-        | Some (length, offset) => Ref length offset :: compress' (before ++ [hd]) tl (length - 1)
+        | None => Lit hd :: compress_aux (before ++ [hd]) tl 0
+        | Some (length, offset) => Ref length offset :: compress_aux (before ++ [hd]) tl (length - 1)
         end
-    | hd :: tl, S x => compress' (before ++ [hd]) tl x
+    | hd :: tl, S x => compress_aux (before ++ [hd]) tl x
     end.
 
   Definition compress (s: list byte): list Token :=
-    compress' [] s 0.
+    compress_aux [] s 0.
 
-  Fixpoint decompress' (acc : list byte) (l : list Token) : list byte :=
+  Fixpoint decompress_aux (acc : list byte) (l : list Token) : list byte :=
     match l with
     | [] => acc
-    | Lit b :: tl => decompress' (acc ++ [b]) tl
-    | Ref len off :: tl => decompress' (acc ++ (slice ((length acc) - off) len acc)) tl
+    | Lit b :: tl => decompress_aux (acc ++ [b]) tl
+    | Ref len off :: tl => decompress_aux (acc ++ (slice ((length acc) - off) len acc)) tl
     end.
 
   Definition decompress (l : list Token) : list byte :=
-    decompress' [] l.
+    decompress_aux [] l.
 
   Definition compress_to_bytes s :=
     nat_to_bytes (length s) ++ (tokens_to_bytes (compress s)).
@@ -36,8 +36,8 @@ Module Impl.
     decompress (bytes_to_tokens compressed).
 
 
-  Lemma compress_valid: forall after before l,
-    Forall valid_token (compress' before after l).
+  Lemma compress_produces_valid_tokens: forall after before l,
+    Forall valid_token (compress_aux before after l).
   Proof.
     induction after; intros; simpl.
     - constructor.
@@ -45,8 +45,8 @@ Module Impl.
       + destruct (find_largest_match before (a :: after)) eqn:?.
         * destruct p as [len off].
           constructor.
-          -- pose proof (find_largest_match_corr1 before (a :: after) len off Heqo).
-             pose proof (find_largest_match_corr2 before (a :: after) len off Heqo).
+          -- pose proof (find_largest_match_length_bounds before (a :: after) len off Heqo).
+             pose proof (find_largest_match_offset_bounds before (a :: after) len off Heqo).
              simpl. tauto.
           -- apply IHafter.
         * constructor.
@@ -56,12 +56,12 @@ Module Impl.
   Qed.
 
   Lemma compress_rolls : forall l before after,
-      compress' before after l
-      = compress' (before ++ (slice 0 l after)) (slice l (length after) after) 0.
+      compress_aux before after l
+      = compress_aux (before ++ (slice 0 l after)) (slice l (length after) after) 0.
   Proof.
     induction l; intros.
     - assert ((slice 0 0 after) = []). {
-        specialize (slice_size after 0 0) as H.
+        specialize (length_slice after 0 0) as H.
         inversion H.
         destruct (slice 0 0) eqn:Hd; simpl.
         - now rewrite Hd.
@@ -89,9 +89,9 @@ Module Impl.
       now rewrite app_assoc.
   Qed.
 
-  Theorem correctness': forall n before after,
+  Theorem compress_decompress_correctness_aux: forall n before after,
     length after <= n ->
-    decompress' before (compress' before after 0) = before ++ after.
+    decompress_aux before (compress_aux before after 0) = before ++ after.
   Proof.
     induction n; simpl; intros.
     - inversion H.
@@ -102,8 +102,8 @@ Module Impl.
       + simpl. rewrite app_nil_r. reflexivity.
       + simpl. destruct (find_largest_match before (_ :: after)) eqn:?.
         -- destruct p as [len off]; simpl.
-           assert ((compress' (before ++ [b]) after (len - 1))
-                   = (compress' (before ++ [b] ++ (slice 0 (len - 1) after))
+           assert ((compress_aux (before ++ [b]) after (len - 1))
+                   = (compress_aux (before ++ [b] ++ (slice 0 (len - 1) after))
                         (slice (len - 1) (length after) after) 0)).
            {
              rewrite compress_rolls.
@@ -111,7 +111,7 @@ Module Impl.
              reflexivity.
            }
            rewrite H0.
-           pose proof (find_largest_match_corr3 before (b :: after) len off Heqo).
+           pose proof (find_largest_match_eq before (b :: after) len off Heqo).
            assert (slice (length before - off) len before = slice 0 len (b :: after)).
            {
             destruct H1 as (H1 & _). eapply list_eqb_implies_equality.
@@ -121,7 +121,7 @@ Module Impl.
            assert (slice 0 len (b :: after) = [b] ++ slice 0 (len - 1) after).
            {
              simpl. destruct len.
-             specialize (find_largest_match_corr1 before (b :: after) 0 off Heqo) as Hcor. lia.
+             specialize (find_largest_match_length_bounds before (b :: after) 0 off Heqo) as Hcor. lia.
              apply f_equal. simpl. assert (len - 0 = len) by lia. rewrite H3. reflexivity.
            }
            rewrite H3.
@@ -153,7 +153,7 @@ Module Impl.
            }
            rewrite H4.
            eapply IHn.
-           pose proof (slice_size after (len - 1) (length after)).
+           pose proof (length_slice after (len - 1) (length after)).
            rewrite H5.
            simpl in H.
            lia.
@@ -170,40 +170,40 @@ Module Impl.
            lia.
   Qed.
 
-  Theorem correctness: forall s,
+  Theorem compress_decompress_correctness: forall s,
     decompress (compress s) = s.
   Proof.
     unfold compress, decompress.
     intros.
-    pose proof (correctness' (length s) [] s ltac:(lia)).
+    pose proof (compress_decompress_correctness_aux (length s) [] s ltac:(lia)).
     rewrite app_nil_l in H.
     exact H.
   Qed.
 
-  Theorem correctness_full: forall s,
+  Theorem compress_to_bytes_correctness: forall s,
     decompress_from_bytes (compress_to_bytes s) = s.
   Proof.
     intros.
     unfold decompress_from_bytes, compress_to_bytes.
     destruct s.
     - reflexivity.
-    - rewrite nat_to_bytes_correctness, to_tokens_correctness.
-      + apply correctness.
-      + apply compress_valid.
+    - rewrite nat_to_bytes_correctness, tokens_to_bytes_to_tokens_correctness.
+      + apply compress_decompress_correctness.
+      + apply compress_produces_valid_tokens.
       + simpl. lia.
   Qed.
 
-  Lemma weight_bound : forall n before after,
+  Lemma compress_weight_upper_bound : forall n before after,
     length after <= n ->
-    list_sum (map token_weight (compress' before after 0)) <= length after.
+    list_sum (map token_weight (compress_aux before after 0)) <= length after.
   Proof.
     induction n; intros; destruct after; simpl; try lia.
     - inversion H.
     - destruct (find_largest_match before (b :: after)) as [[len off] | _] eqn:Hd.
       + rewrite compress_rolls.
-        specialize (find_largest_match_corr1 _ _ _ _ Hd) as Hlength.
+        specialize (find_largest_match_length_bounds _ _ _ _ Hd) as Hlength.
         apply le_n_S.
-        specialize (find_largest_match_corr3 _ _ _ _ Hd) as Hcor.
+        specialize (find_largest_match_eq _ _ _ _ Hd) as Hcor.
         destruct Hcor as (Hcor1 & Hcor2).
         do 2 (destruct after; simpl in Hcor2; try lia).
         do 2 apply le_n_S.
@@ -211,11 +211,11 @@ Module Impl.
         * apply IHn.
           do 3 (destruct len; try lia).
           simpl in H |- *.
-          rewrite slice_size.
+          rewrite length_slice.
           lia.
         * do 3 (destruct len; try lia).
           simpl in H |- *.
-          rewrite slice_size.
+          rewrite length_slice.
           match goal with
           | [ |- _ <= ?fn ?a ] => assert (He: fn a = length after) by reflexivity; rewrite He
           end.
@@ -224,26 +224,26 @@ Module Impl.
         simpl in H. lia.
   Qed.
 
-  Lemma upperbound': forall before after,
-      length (tokens_to_bytes (compress' before after 0))
+  Lemma compress_bytes_upper_bound_aux: forall before after,
+      length (tokens_to_bytes (compress_aux before after 0))
       <= (9 * length after + 7) / 8.
   Proof.
-    intros. specialize (weight_bound (length after) before after ltac:(lia)) as H.
-    pose proof (compress_valid after before 0) as Hv.
-    specialize (tokens_to_bytes_bounded_by_weight (length (compress' before after 0))
-                (compress' before after 0) Hv ltac:(lia)) as H'.
+    intros. specialize (compress_weight_upper_bound (length after) before after ltac:(lia)) as H.
+    pose proof (compress_produces_valid_tokens after before 0) as Hv.
+    specialize (tokens_to_bytes_bounded_by_weight (length (compress_aux before after 0))
+                (compress_aux before after 0) Hv ltac:(lia)) as H'.
     etransitivity. exact H'.
     apply Nat.Div0.div_le_mono.
     lia.
   Qed.
 
-  Theorem upperbound: forall s,
+  Theorem compress_bytes_upper_bound: forall s,
     length (compress_to_bytes s) <= (9 * length s + 7) / 8 + Nat.log2 (length s) / 7 + 1.
   Proof.
     unfold compress_to_bytes, compress.
     intros.
     rewrite length_app.
-    pose proof (upperbound' [] s) as Hub.
+    pose proof (compress_bytes_upper_bound_aux [] s) as Hub.
     pose proof (nat_to_bytes_length (length s)) as Hl.
     lia.
   Qed.
